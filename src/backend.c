@@ -2183,6 +2183,7 @@ int ocl_init (hashcat_ctx_t *hashcat_ctx)
   if (ocl->lib == NULL) return -1;
 
   HC_LOAD_FUNC (ocl, clBuildProgram,            OCL_CLBUILDPROGRAM,             OpenCL, 1);
+  HC_LOAD_FUNC (ocl, clCompileProgram,          OCL_CLCOMPILEPROGRAM,           OpenCL, 1);
   HC_LOAD_FUNC (ocl, clCreateBuffer,            OCL_CLCREATEBUFFER,             OpenCL, 1);
   HC_LOAD_FUNC (ocl, clCreateCommandQueue,      OCL_CLCREATECOMMANDQUEUE,       OpenCL, 1);
   HC_LOAD_FUNC (ocl, clCreateContext,           OCL_CLCREATECONTEXT,            OpenCL, 1);
@@ -2205,6 +2206,7 @@ int ocl_init (hashcat_ctx_t *hashcat_ctx)
   HC_LOAD_FUNC (ocl, clGetPlatformInfo,         OCL_CLGETPLATFORMINFO,          OpenCL, 1);
   HC_LOAD_FUNC (ocl, clGetProgramBuildInfo,     OCL_CLGETPROGRAMBUILDINFO,      OpenCL, 1);
   HC_LOAD_FUNC (ocl, clGetProgramInfo,          OCL_CLGETPROGRAMINFO,           OpenCL, 1);
+  HC_LOAD_FUNC (ocl, clLinkProgram,             OCL_CLLINKPROGRAM,              OpenCL, 1);
   HC_LOAD_FUNC (ocl, clReleaseCommandQueue,     OCL_CLRELEASECOMMANDQUEUE,      OpenCL, 1);
   HC_LOAD_FUNC (ocl, clReleaseContext,          OCL_CLRELEASECONTEXT,           OpenCL, 1);
   HC_LOAD_FUNC (ocl, clReleaseKernel,           OCL_CLRELEASEKERNEL,            OpenCL, 1);
@@ -2564,6 +2566,44 @@ int hc_clBuildProgram (hashcat_ctx_t *hashcat_ctx, cl_program program, cl_uint n
   if (CL_err != CL_SUCCESS)
   {
     event_log_error (hashcat_ctx, "clBuildProgram(): %s", val2cstr_cl (CL_err));
+
+    return -1;
+  }
+
+  return 0;
+}
+
+int hc_clCompileProgram (hashcat_ctx_t *hashcat_ctx, cl_program program, cl_uint num_devices, const cl_device_id *device_list, const char *options, cl_uint num_input_headers, const cl_program *input_headers, const char **header_include_names, void (CL_CALLBACK *pfn_notify) (cl_program program, void *user_data), void *user_data)
+{
+  backend_ctx_t *backend_ctx = hashcat_ctx->backend_ctx;
+
+  OCL_PTR *ocl = (OCL_PTR *) backend_ctx->ocl;
+
+  const cl_int CL_err = ocl->clCompileProgram (program, num_devices, device_list, options, num_input_headers, input_headers, header_include_names, pfn_notify, user_data);
+
+  if (CL_err != CL_SUCCESS)
+  {
+    event_log_error (hashcat_ctx, "clCompileProgram(): %s", val2cstr_cl (CL_err));
+
+    return -1;
+  }
+
+  return 0;
+}
+
+int hc_clLinkProgram (hashcat_ctx_t *hashcat_ctx, cl_context context, cl_uint num_devices, const cl_device_id *device_list, const char *options, cl_uint num_input_programs, const cl_program *input_programs, void (CL_CALLBACK *pfn_notify) (cl_program program, void *user_data), void *user_data, cl_program *program)
+{
+  backend_ctx_t *backend_ctx = hashcat_ctx->backend_ctx;
+
+  OCL_PTR *ocl = (OCL_PTR *) backend_ctx->ocl;
+
+  cl_int CL_err;
+
+  *program = ocl->clLinkProgram (context, num_devices, device_list, options, num_input_programs, input_programs, pfn_notify, user_data, &CL_err);
+
+  if (CL_err != CL_SUCCESS)
+  {
+    event_log_error (hashcat_ctx, "clLinkProgram(): %s", val2cstr_cl (CL_err));
 
     return -1;
   }
@@ -7134,6 +7174,7 @@ void backend_ctx_devices_destroy (hashcat_ctx_t *hashcat_ctx)
 void backend_ctx_devices_sync_tuning (hashcat_ctx_t *hashcat_ctx)
 {
   backend_ctx_t *backend_ctx = hashcat_ctx->backend_ctx;
+  hashconfig_t  *hashconfig  = hashcat_ctx->hashconfig;
 
   if (backend_ctx->enabled == false) return;
 
@@ -7159,7 +7200,7 @@ void backend_ctx_devices_sync_tuning (hashcat_ctx_t *hashcat_ctx)
       device_param_dst->kernel_loops   = device_param_src->kernel_loops;
       device_param_dst->kernel_threads = device_param_src->kernel_threads;
 
-      const u32 hardware_power = device_param_dst->device_processors * device_param_dst->kernel_threads;
+      const u32 hardware_power = ((hashconfig->opts_type & OPTS_TYPE_MP_MULTI_DISABLE) ? 1 : device_param_dst->device_processors) * device_param_dst->kernel_threads;
 
       device_param_dst->hardware_power = hardware_power;
 
@@ -7707,17 +7748,17 @@ static bool load_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_p
 
     if (device_param->is_opencl == true)
     {
-      if (hc_clCreateProgramWithSource (hashcat_ctx, device_param->opencl_context, 1, (const char **) kernel_sources, NULL, opencl_program) == -1) return false;
-
-      const int CL_rc = hc_clBuildProgram (hashcat_ctx, *opencl_program, 1, &device_param->opencl_device, build_options_buf, NULL, NULL);
-
-      //if (CL_rc == -1) return -1;
-
       size_t build_log_size = 0;
 
-      hc_clGetProgramBuildInfo (hashcat_ctx, *opencl_program, device_param->opencl_device, CL_PROGRAM_BUILD_LOG, 0, NULL, &build_log_size);
+      int CL_rc;
 
-      //if (CL_rc == -1) return -1;
+      cl_program p1 = NULL;
+
+      if (hc_clCreateProgramWithSource (hashcat_ctx, device_param->opencl_context, 1, (const char **) kernel_sources, NULL, &p1) == -1) return false;
+
+      CL_rc = hc_clCompileProgram (hashcat_ctx, p1, 1, &device_param->opencl_device, build_options_buf, 0, NULL, NULL, NULL, NULL);
+
+      hc_clGetProgramBuildInfo (hashcat_ctx, p1, device_param->opencl_device, CL_PROGRAM_BUILD_LOG, 0, NULL, &build_log_size);
 
       #if defined (DEBUG)
       if ((build_log_size > 1) || (CL_rc == -1))
@@ -7727,7 +7768,7 @@ static bool load_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_p
       {
         char *build_log = (char *) hcmalloc (build_log_size + 1);
 
-        const int rc_clGetProgramBuildInfo = hc_clGetProgramBuildInfo (hashcat_ctx, *opencl_program, device_param->opencl_device, CL_PROGRAM_BUILD_LOG, build_log_size, build_log, NULL);
+        const int rc_clGetProgramBuildInfo = hc_clGetProgramBuildInfo (hashcat_ctx, p1, device_param->opencl_device, CL_PROGRAM_BUILD_LOG, build_log_size, build_log, NULL);
 
         if (rc_clGetProgramBuildInfo == -1) return false;
 
@@ -7737,6 +7778,21 @@ static bool load_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_p
       }
 
       if (CL_rc == -1) return false;
+
+      cl_program t2[1];
+
+      t2[0] = p1;
+
+      cl_program fin;
+
+      if (hc_clLinkProgram (hashcat_ctx, device_param->opencl_context, 1, &device_param->opencl_device, NULL, 1, t2, NULL, NULL, &fin) == -1) return false;
+
+      // it seems errors caused by clLinkProgram() do not go into CL_PROGRAM_BUILD
+      // I couldn't find any information on the web explaining how else to retrieve the error messages from the linker
+
+      *opencl_program = fin;
+
+      hc_clReleaseProgram (hashcat_ctx, p1);
 
       if (cache_disable == false)
       {
@@ -10411,7 +10467,7 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
 
     device_param->kernel_threads = kernel_threads;
 
-    device_param->hardware_power = device_processors * kernel_threads;
+    device_param->hardware_power = ((hashconfig->opts_type & OPTS_TYPE_MP_MULTI_DISABLE) ? 1 : device_processors) * kernel_threads;
 
     u32 kernel_accel_min = device_param->kernel_accel_min;
     u32 kernel_accel_max = device_param->kernel_accel_max;
@@ -10452,16 +10508,6 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
     // note we're allocating 3 blocks of that size.
 
     const u64 PWS_SPACE = 1024ULL * 1024ULL * 1024ULL;
-
-    // sometimes device_available_mem and device_maxmem_alloc reported back from the opencl runtime are a bit inaccurate.
-    // let's add some extra space just to be sure.
-
-    //const u64 EXTRA_SPACE = 64ULL * 1024ULL * 1024ULL;
-
-    // it seems the returned values to device_available_mem are inaccurate
-    // we need more room
-
-    const u64 EXTRA_SPACE = device_param->device_maxmem_alloc / 4;
 
     while (kernel_accel_max >= kernel_accel_min)
     {
@@ -10513,6 +10559,15 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
       int memory_limit_hit = 0;
 
       if (size_pws > PWS_SPACE) memory_limit_hit = 1;
+
+      // sometimes device_available_mem and device_maxmem_alloc reported back from the opencl runtime are a bit inaccurate.
+      // let's add some extra space just to be sure.
+      // now depends on the kernel-accel value (where scrypt and similar benefits), but also hard minimum 64mb and maximum 1024mb limit
+
+      u64 EXTRA_SPACE = (1024ULL * 1024ULL) * kernel_accel_max;
+
+      EXTRA_SPACE = MAX (EXTRA_SPACE, (  64ULL * 1024ULL * 1024ULL));
+      EXTRA_SPACE = MIN (EXTRA_SPACE, (1024ULL * 1024ULL * 1024ULL));
 
       if ((size_pws   + EXTRA_SPACE) > device_param->device_maxmem_alloc) memory_limit_hit = 1;
       if ((size_tmps  + EXTRA_SPACE) > device_param->device_maxmem_alloc) memory_limit_hit = 1;
