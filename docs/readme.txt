@@ -98,6 +98,7 @@ NVIDIA GPUs require "NVIDIA Driver" (440.64 or later) and "CUDA Toolkit" (9.0 or
 - sha1(md5(md5($pass)))
 - sha1(sha1($pass))
 - sha1(sha1($pass).$salt)
+- sha1($salt.sha1($pass.$salt))
 - sha1(utf16le($pass).$salt)
 - sha256($pass.$salt)
 - sha256($salt.$pass)
@@ -160,7 +161,8 @@ NVIDIA GPUs require "NVIDIA Driver" (440.64 or later) and "CUDA Toolkit" (9.0 or
 - NetNTLMv1 / NetNTLMv1+ESS
 - NetNTLMv2
 - Skype
-- Telegram Desktop App Passcode (PBKDF2-HMAC-SHA1)
+- Telegram Desktop <  v2.1.14 (PBKDF2-HMAC-SHA1)
+- Telegram Desktop >= v2.1.14 (PBKDF2-HMAC-SHA512)
 - Telegram Mobile App Passcode (SHA256)
 - MongoDB ServerKey SCRAM-SHA-1
 - MongoDB ServerKey SCRAM-SHA-256
