@@ -40,14 +40,18 @@
 ## Bugs
 ##
 
-- Fixed too early execution of some module functions which could make use of non-final values opts_type and opti_type
-- Fixed internal access on module option attribute OPTS_TYPE_SUGGEST_KG with the result that it was unused
-- Fixed race condition resulting in out of memory error on startup if multiple hashcat instances are started at the same time
-- Fixed unexpected non-unique salts in multi-hash cracking in Bitcoin/Litecoin wallet.dat module which lead to false negatives
-- Fixed rare case of misalignment of the status prompt when other user warnings are shown within the hashcat output
-- Fixed password reassembling for cracked hashes on host for slow hashes in optimized mode that are longer than 32 characters
+- Fixed both false negative and false positive result in -m 3000 in -a 3 (affected only NVIDIA GPU) 
+- Fixed buffer overflow in -m 1800 in -O mode which is optimized to handle only password candidates up to length 15
 - Fixed incorrect maximum password length support for -m 400 in optimized mode (reduced from 55 to 39)
+- Fixed internal access on module option attribute OPTS_TYPE_SUGGEST_KG with the result that it was unused
 - Fixed invalid handling of outfile folder entries for -m 22000
+- Fixed password reassembling for cracked hashes on host for slow hashes in optimized mode that are longer than 32 characters
+- Fixed race condition in potfile check during removal of empty hashes
+- Fixed race condition resulting in out of memory error on startup if multiple hashcat instances are started at the same time
+- Fixed rare case of misalignment of the status prompt when other user warnings are shown within the hashcat output
+- Fixed too early execution of some module functions which could make use of non-final values opts_type and opti_type
+- Fixed tuning database search if a device was not assigned an alias it couldn't be found in general
+- Fixed unexpected non-unique salts in multi-hash cracking in Bitcoin/Litecoin wallet.dat module which lead to false negatives
 
 ##
 ## Improvements
@@ -60,6 +64,7 @@
 - OpenCL Runtime: Workaround JiT compiler deadlock on NVIDIA driver >= 465.89
 - RAR3 Kernels: Improved loop code, improving performance by 23%
 - Startup time: Improved the startup time by avoiding some time intensive operations for skipped devices
+- Scrypt Kernels: Reduced kernel wait times by making it a true split kernel where iteration count = N value
 
 ##
 ## Technical

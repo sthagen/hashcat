@@ -24,6 +24,7 @@ static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE;
 static const u64   OPTS_TYPE      = OPTS_TYPE_PT_GENERATE_LE
                                   | OPTS_TYPE_MP_MULTI_DISABLE
                                   | OPTS_TYPE_NATIVE_THREADS
+                                  | OPTS_TYPE_LOOP_PREPARE
                                   | OPTS_TYPE_SELF_TEST_DISABLE;
 static const u32   SALT_TYPE      = SALT_TYPE_EMBEDDED;
 static const char *ST_PASS        = "hashcat";
@@ -52,14 +53,14 @@ static const u64 SCRYPT_P = 1;
 
 u32 module_kernel_loops_min (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
 {
-  const u32 kernel_loops_min = 1;
+  const u32 kernel_loops_min = 1024;
 
   return kernel_loops_min;
 }
 
 u32 module_kernel_loops_max (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
 {
-  const u32 kernel_loops_max = 1;
+  const u32 kernel_loops_max = 1024;
 
   return kernel_loops_max;
 }
@@ -115,6 +116,29 @@ u64 module_extra_buffer_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE
 
   const u64 size_hooks = kernel_power_max * hashconfig->hook_size;
 
+  u64 size_pws_pre  = 4;
+  u64 size_pws_base = 4;
+
+  if (user_options->slow_candidates == true)
+  {
+    // size_pws_pre
+
+    size_pws_pre = kernel_power_max * sizeof (pw_pre_t);
+
+    // size_pws_base
+
+    size_pws_base = kernel_power_max * sizeof (pw_pre_t);
+  }
+
+  // sometimes device_available_mem and device_maxmem_alloc reported back from the opencl runtime are a bit inaccurate.
+  // let's add some extra space just to be sure.
+  // now depends on the kernel-accel value (where scrypt and similar benefits), but also hard minimum 64mb and maximum 1024mb limit
+
+  u64 EXTRA_SPACE = (1024ULL * 1024ULL) * device_param->kernel_accel_max;
+
+  EXTRA_SPACE = MAX (EXTRA_SPACE, (  64ULL * 1024ULL * 1024ULL));
+  EXTRA_SPACE = MIN (EXTRA_SPACE, (1024ULL * 1024ULL * 1024ULL));
+
   const u64 scrypt_extra_space
     = device_param->size_bfs
     + device_param->size_combs
@@ -137,7 +161,10 @@ u64 module_extra_buffer_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE
     + size_pws_comp
     + size_pws_idx
     + size_tmps
-    + size_hooks;
+    + size_hooks
+    + size_pws_pre
+    + size_pws_base
+    + EXTRA_SPACE;
 
   bool not_enough_memory = true;
 
@@ -273,11 +300,14 @@ int module_hash_decode (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSE
   memcpy (salt_buf_ptr, salt_pos, salt_len);
 
   salt->salt_len  = salt_len;
-  salt->salt_iter = 1;
 
-  salt->scrypt_N  = 16384;
-  salt->scrypt_r  = 1;
-  salt->scrypt_p  = 1;
+  salt->scrypt_N  = SCRYPT_N;
+  salt->scrypt_r  = SCRYPT_R;
+  salt->scrypt_p  = SCRYPT_P;
+
+  salt->salt_iter    = salt->scrypt_N;
+  salt->salt_repeats = salt->scrypt_p - 1;
+
 
   // base64 decode hash
 

@@ -23,7 +23,7 @@ static const u64   KERN_TYPE      = 15700;
 static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE;
 static const u64   OPTS_TYPE      = OPTS_TYPE_PT_GENERATE_LE
                                   | OPTS_TYPE_MP_MULTI_DISABLE
-                                  | OPTS_TYPE_NATIVE_THREADS
+                                  | OPTS_TYPE_LOOP_PREPARE
                                   | OPTS_TYPE_SELF_TEST_DISABLE
                                   | OPTS_TYPE_ST_HEX;
 static const u32   SALT_TYPE      = SALT_TYPE_EMBEDDED;
@@ -60,16 +60,23 @@ static const u64 SCRYPT_P = 1;
 
 u32 module_kernel_loops_min (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
 {
-  const u32 kernel_loops_min = 1;
+  const u32 kernel_loops_min = 1024;
 
   return kernel_loops_min;
 }
 
 u32 module_kernel_loops_max (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
 {
-  const u32 kernel_loops_max = 1;
+  const u32 kernel_loops_max = 1024;
 
   return kernel_loops_max;
+}
+
+u32 module_kernel_threads_max (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
+{
+  const u32 kernel_threads_max = 4;
+
+  return kernel_threads_max;
 }
 
 u64 module_esalt_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
@@ -130,6 +137,29 @@ u64 module_extra_buffer_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE
 
   const u64 size_hooks = kernel_power_max * hashconfig->hook_size;
 
+  u64 size_pws_pre  = 4;
+  u64 size_pws_base = 4;
+
+  if (user_options->slow_candidates == true)
+  {
+    // size_pws_pre
+
+    size_pws_pre = kernel_power_max * sizeof (pw_pre_t);
+
+    // size_pws_base
+
+    size_pws_base = kernel_power_max * sizeof (pw_pre_t);
+  }
+
+  // sometimes device_available_mem and device_maxmem_alloc reported back from the opencl runtime are a bit inaccurate.
+  // let's add some extra space just to be sure.
+  // now depends on the kernel-accel value (where scrypt and similar benefits), but also hard minimum 64mb and maximum 1024mb limit
+
+  u64 EXTRA_SPACE = (1024ULL * 1024ULL) * device_param->kernel_accel_max;
+
+  EXTRA_SPACE = MAX (EXTRA_SPACE, (  64ULL * 1024ULL * 1024ULL));
+  EXTRA_SPACE = MIN (EXTRA_SPACE, (1024ULL * 1024ULL * 1024ULL));
+
   const u64 scrypt_extra_space
     = device_param->size_bfs
     + device_param->size_combs
@@ -152,7 +182,10 @@ u64 module_extra_buffer_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE
     + size_pws_comp
     + size_pws_idx
     + size_tmps
-    + size_hooks;
+    + size_hooks
+    + size_pws_pre
+    + size_pws_base
+    + EXTRA_SPACE;
 
   bool not_enough_memory = true;
 
@@ -210,20 +243,6 @@ u64 module_extra_tmp_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UN
   const u64 tmp_size = 128ULL * scrypt_r * scrypt_p;
 
   return tmp_size;
-}
-
-bool module_unstable_warning (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra, MAYBE_UNUSED const hc_device_param_t *device_param)
-{
-  if (device_param->opencl_platform_vendor_id == VENDOR_ID_APPLE)
-  {
-    // Invalid extra buffer size.
-    if ((device_param->opencl_device_vendor_id == VENDOR_ID_INTEL_SDK) && (device_param->opencl_device_type & CL_DEVICE_TYPE_GPU))
-    {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 bool module_jit_cache_disable (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra, MAYBE_UNUSED const hashes_t *hashes, MAYBE_UNUSED const hc_device_param_t *device_param)
@@ -337,6 +356,11 @@ int module_hash_decode (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSE
   salt->scrypt_r = scrypt_r;
   salt->scrypt_p = scrypt_p;
 
+  salt->salt_iter    = salt->scrypt_N;
+  salt->salt_repeats = salt->scrypt_p - 1;
+
+  if (salt->scrypt_N % 1024) return (PARSER_SALT_VALUE); // we set loop count to 1024 fixed
+
   // salt
 
   const u8 *salt_pos = token.buf[4];
@@ -354,8 +378,6 @@ int module_hash_decode (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSE
   ethereum_scrypt->salt_buf[5] = salt->salt_buf[5];
   ethereum_scrypt->salt_buf[6] = salt->salt_buf[6];
   ethereum_scrypt->salt_buf[7] = salt->salt_buf[7];
-
-  salt->salt_iter = 1;
 
   // ciphertext
 
@@ -476,7 +498,7 @@ void module_init (module_ctx_t *module_ctx)
   module_ctx->module_kernel_accel_min         = MODULE_DEFAULT;
   module_ctx->module_kernel_loops_max         = module_kernel_loops_max;
   module_ctx->module_kernel_loops_min         = module_kernel_loops_min;
-  module_ctx->module_kernel_threads_max       = MODULE_DEFAULT;
+  module_ctx->module_kernel_threads_max       = module_kernel_threads_max;
   module_ctx->module_kernel_threads_min       = MODULE_DEFAULT;
   module_ctx->module_kern_type                = module_kern_type;
   module_ctx->module_kern_type_dynamic        = MODULE_DEFAULT;
@@ -497,6 +519,6 @@ void module_init (module_ctx_t *module_ctx)
   module_ctx->module_st_hash                  = module_st_hash;
   module_ctx->module_st_pass                  = module_st_pass;
   module_ctx->module_tmp_size                 = module_tmp_size;
-  module_ctx->module_unstable_warning         = module_unstable_warning;
+  module_ctx->module_unstable_warning         = MODULE_DEFAULT;
   module_ctx->module_warmup_disable           = module_warmup_disable;
 }
