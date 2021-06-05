@@ -178,7 +178,9 @@ DECLSPEC void sha384_init (sha384_ctx_t *ctx)
 
 DECLSPEC void sha384_update_128 (sha384_ctx_t *ctx, u32 *w0, u32 *w1, u32 *w2, u32 *w3, u32 *w4, u32 *w5, u32 *w6, u32 *w7, const int len)
 {
-  MAYBE_VOLATILE const int pos = ctx->len & 127;
+  if (len == 0) return;
+
+  const int pos = ctx->len & 127;
 
   ctx->len += len;
 
@@ -622,20 +624,269 @@ DECLSPEC void sha384_update_swap (sha384_ctx_t *ctx, const u32 *w, const int len
 
 DECLSPEC void sha384_update_utf16le (sha384_ctx_t *ctx, const u32 *w, const int len)
 {
-  u32 w_utf16_buf[256] = { 0 };
+  if (hc_enc_scan (w, len))
+  {
+    hc_enc_t hc_enc;
 
-  const int w_utf16_len = utf8_to_utf16le (w, len, 256, w_utf16_buf, sizeof (w_utf16_buf));
+    hc_enc_init (&hc_enc);
 
-  sha384_update (ctx, w_utf16_buf, w_utf16_len);
+    while (hc_enc_has_next (&hc_enc, len))
+    {
+      u32 enc_buf[32] = { 0 };
+
+      const int enc_len = hc_enc_next (&hc_enc, w, len, 256, enc_buf, sizeof (enc_buf));
+
+      sha384_update_128 (ctx, enc_buf + 0, enc_buf + 4, enc_buf + 8, enc_buf + 12, enc_buf + 16, enc_buf + 20, enc_buf + 24, enc_buf + 28, enc_len);
+    }
+
+    return;
+  }
+
+  u32 w0[4];
+  u32 w1[4];
+  u32 w2[4];
+  u32 w3[4];
+  u32 w4[4];
+  u32 w5[4];
+  u32 w6[4];
+  u32 w7[4];
+
+  int pos1;
+  int pos4;
+
+  for (pos1 = 0, pos4 = 0; pos1 < len - 64; pos1 += 64, pos4 += 16)
+  {
+    w0[0] = w[pos4 +  0];
+    w0[1] = w[pos4 +  1];
+    w0[2] = w[pos4 +  2];
+    w0[3] = w[pos4 +  3];
+    w1[0] = w[pos4 +  4];
+    w1[1] = w[pos4 +  5];
+    w1[2] = w[pos4 +  6];
+    w1[3] = w[pos4 +  7];
+    w2[0] = w[pos4 +  8];
+    w2[1] = w[pos4 +  9];
+    w2[2] = w[pos4 + 10];
+    w2[3] = w[pos4 + 11];
+    w3[0] = w[pos4 + 12];
+    w3[1] = w[pos4 + 13];
+    w3[2] = w[pos4 + 14];
+    w3[3] = w[pos4 + 15];
+
+    make_utf16le_S (w3, w6, w7);
+    make_utf16le_S (w2, w4, w5);
+    make_utf16le_S (w1, w2, w3);
+    make_utf16le_S (w0, w0, w1);
+
+    sha384_update_128 (ctx, w0, w1, w2, w3, w4, w5, w6, w7, 64 * 2);
+  }
+
+  w0[0] = w[pos4 +  0];
+  w0[1] = w[pos4 +  1];
+  w0[2] = w[pos4 +  2];
+  w0[3] = w[pos4 +  3];
+  w1[0] = w[pos4 +  4];
+  w1[1] = w[pos4 +  5];
+  w1[2] = w[pos4 +  6];
+  w1[3] = w[pos4 +  7];
+  w2[0] = w[pos4 +  8];
+  w2[1] = w[pos4 +  9];
+  w2[2] = w[pos4 + 10];
+  w2[3] = w[pos4 + 11];
+  w3[0] = w[pos4 + 12];
+  w3[1] = w[pos4 + 13];
+  w3[2] = w[pos4 + 14];
+  w3[3] = w[pos4 + 15];
+
+  make_utf16le_S (w3, w6, w7);
+  make_utf16le_S (w2, w4, w5);
+  make_utf16le_S (w1, w2, w3);
+  make_utf16le_S (w0, w0, w1);
+
+  sha384_update_128 (ctx, w0, w1, w2, w3, w4, w5, w6, w7, (len - pos1) * 2);
 }
 
 DECLSPEC void sha384_update_utf16le_swap (sha384_ctx_t *ctx, const u32 *w, const int len)
 {
-  u32 w_utf16_buf[256] = { 0 };
+  if (hc_enc_scan (w, len))
+  {
+    hc_enc_t hc_enc;
 
-  const int w_utf16_len = utf8_to_utf16le (w, len, 256, w_utf16_buf, sizeof (w_utf16_buf));
+    hc_enc_init (&hc_enc);
 
-  sha384_update_swap (ctx, w_utf16_buf, w_utf16_len);
+    while (hc_enc_has_next (&hc_enc, len))
+    {
+      u32 enc_buf[32] = { 0 };
+
+      const int enc_len = hc_enc_next (&hc_enc, w, len, 256, enc_buf, sizeof (enc_buf));
+
+      enc_buf[ 0] = hc_swap32_S (enc_buf[ 0]);
+      enc_buf[ 1] = hc_swap32_S (enc_buf[ 1]);
+      enc_buf[ 2] = hc_swap32_S (enc_buf[ 2]);
+      enc_buf[ 3] = hc_swap32_S (enc_buf[ 3]);
+      enc_buf[ 4] = hc_swap32_S (enc_buf[ 4]);
+      enc_buf[ 5] = hc_swap32_S (enc_buf[ 5]);
+      enc_buf[ 6] = hc_swap32_S (enc_buf[ 6]);
+      enc_buf[ 7] = hc_swap32_S (enc_buf[ 7]);
+      enc_buf[ 8] = hc_swap32_S (enc_buf[ 8]);
+      enc_buf[ 9] = hc_swap32_S (enc_buf[ 9]);
+      enc_buf[10] = hc_swap32_S (enc_buf[10]);
+      enc_buf[11] = hc_swap32_S (enc_buf[11]);
+      enc_buf[12] = hc_swap32_S (enc_buf[12]);
+      enc_buf[13] = hc_swap32_S (enc_buf[13]);
+      enc_buf[14] = hc_swap32_S (enc_buf[14]);
+      enc_buf[15] = hc_swap32_S (enc_buf[15]);
+      enc_buf[16] = hc_swap32_S (enc_buf[16]);
+      enc_buf[17] = hc_swap32_S (enc_buf[17]);
+      enc_buf[18] = hc_swap32_S (enc_buf[18]);
+      enc_buf[19] = hc_swap32_S (enc_buf[19]);
+      enc_buf[20] = hc_swap32_S (enc_buf[20]);
+      enc_buf[21] = hc_swap32_S (enc_buf[21]);
+      enc_buf[22] = hc_swap32_S (enc_buf[22]);
+      enc_buf[23] = hc_swap32_S (enc_buf[23]);
+      enc_buf[24] = hc_swap32_S (enc_buf[24]);
+      enc_buf[25] = hc_swap32_S (enc_buf[25]);
+      enc_buf[26] = hc_swap32_S (enc_buf[26]);
+      enc_buf[27] = hc_swap32_S (enc_buf[27]);
+      enc_buf[28] = hc_swap32_S (enc_buf[28]);
+      enc_buf[29] = hc_swap32_S (enc_buf[29]);
+      enc_buf[30] = hc_swap32_S (enc_buf[30]);
+      enc_buf[31] = hc_swap32_S (enc_buf[31]);
+
+      sha384_update_128 (ctx, enc_buf + 0, enc_buf + 4, enc_buf + 8, enc_buf + 12, enc_buf + 16, enc_buf + 20, enc_buf + 24, enc_buf + 28, enc_len);
+    }
+
+    return;
+  }
+
+  u32 w0[4];
+  u32 w1[4];
+  u32 w2[4];
+  u32 w3[4];
+  u32 w4[4];
+  u32 w5[4];
+  u32 w6[4];
+  u32 w7[4];
+
+  int pos1;
+  int pos4;
+
+  for (pos1 = 0, pos4 = 0; pos1 < len - 64; pos1 += 64, pos4 += 16)
+  {
+    w0[0] = w[pos4 +  0];
+    w0[1] = w[pos4 +  1];
+    w0[2] = w[pos4 +  2];
+    w0[3] = w[pos4 +  3];
+    w1[0] = w[pos4 +  4];
+    w1[1] = w[pos4 +  5];
+    w1[2] = w[pos4 +  6];
+    w1[3] = w[pos4 +  7];
+    w2[0] = w[pos4 +  8];
+    w2[1] = w[pos4 +  9];
+    w2[2] = w[pos4 + 10];
+    w2[3] = w[pos4 + 11];
+    w3[0] = w[pos4 + 12];
+    w3[1] = w[pos4 + 13];
+    w3[2] = w[pos4 + 14];
+    w3[3] = w[pos4 + 15];
+
+    make_utf16le_S (w3, w6, w7);
+    make_utf16le_S (w2, w4, w5);
+    make_utf16le_S (w1, w2, w3);
+    make_utf16le_S (w0, w0, w1);
+
+    w0[0] = hc_swap32_S (w0[0]);
+    w0[1] = hc_swap32_S (w0[1]);
+    w0[2] = hc_swap32_S (w0[2]);
+    w0[3] = hc_swap32_S (w0[3]);
+    w1[0] = hc_swap32_S (w1[0]);
+    w1[1] = hc_swap32_S (w1[1]);
+    w1[2] = hc_swap32_S (w1[2]);
+    w1[3] = hc_swap32_S (w1[3]);
+    w2[0] = hc_swap32_S (w2[0]);
+    w2[1] = hc_swap32_S (w2[1]);
+    w2[2] = hc_swap32_S (w2[2]);
+    w2[3] = hc_swap32_S (w2[3]);
+    w3[0] = hc_swap32_S (w3[0]);
+    w3[1] = hc_swap32_S (w3[1]);
+    w3[2] = hc_swap32_S (w3[2]);
+    w3[3] = hc_swap32_S (w3[3]);
+    w4[0] = hc_swap32_S (w4[0]);
+    w4[1] = hc_swap32_S (w4[1]);
+    w4[2] = hc_swap32_S (w4[2]);
+    w4[3] = hc_swap32_S (w4[3]);
+    w5[0] = hc_swap32_S (w5[0]);
+    w5[1] = hc_swap32_S (w5[1]);
+    w5[2] = hc_swap32_S (w5[2]);
+    w5[3] = hc_swap32_S (w5[3]);
+    w6[0] = hc_swap32_S (w6[0]);
+    w6[1] = hc_swap32_S (w6[1]);
+    w6[2] = hc_swap32_S (w6[2]);
+    w6[3] = hc_swap32_S (w6[3]);
+    w7[0] = hc_swap32_S (w7[0]);
+    w7[1] = hc_swap32_S (w7[1]);
+    w7[2] = hc_swap32_S (w7[2]);
+    w7[3] = hc_swap32_S (w7[3]);
+
+    sha384_update_128 (ctx, w0, w1, w2, w3, w4, w5, w6, w7, 64 * 2);
+  }
+
+  w0[0] = w[pos4 +  0];
+  w0[1] = w[pos4 +  1];
+  w0[2] = w[pos4 +  2];
+  w0[3] = w[pos4 +  3];
+  w1[0] = w[pos4 +  4];
+  w1[1] = w[pos4 +  5];
+  w1[2] = w[pos4 +  6];
+  w1[3] = w[pos4 +  7];
+  w2[0] = w[pos4 +  8];
+  w2[1] = w[pos4 +  9];
+  w2[2] = w[pos4 + 10];
+  w2[3] = w[pos4 + 11];
+  w3[0] = w[pos4 + 12];
+  w3[1] = w[pos4 + 13];
+  w3[2] = w[pos4 + 14];
+  w3[3] = w[pos4 + 15];
+
+  make_utf16le_S (w3, w6, w7);
+  make_utf16le_S (w2, w4, w5);
+  make_utf16le_S (w1, w2, w3);
+  make_utf16le_S (w0, w0, w1);
+
+  w0[0] = hc_swap32_S (w0[0]);
+  w0[1] = hc_swap32_S (w0[1]);
+  w0[2] = hc_swap32_S (w0[2]);
+  w0[3] = hc_swap32_S (w0[3]);
+  w1[0] = hc_swap32_S (w1[0]);
+  w1[1] = hc_swap32_S (w1[1]);
+  w1[2] = hc_swap32_S (w1[2]);
+  w1[3] = hc_swap32_S (w1[3]);
+  w2[0] = hc_swap32_S (w2[0]);
+  w2[1] = hc_swap32_S (w2[1]);
+  w2[2] = hc_swap32_S (w2[2]);
+  w2[3] = hc_swap32_S (w2[3]);
+  w3[0] = hc_swap32_S (w3[0]);
+  w3[1] = hc_swap32_S (w3[1]);
+  w3[2] = hc_swap32_S (w3[2]);
+  w3[3] = hc_swap32_S (w3[3]);
+  w4[0] = hc_swap32_S (w4[0]);
+  w4[1] = hc_swap32_S (w4[1]);
+  w4[2] = hc_swap32_S (w4[2]);
+  w4[3] = hc_swap32_S (w4[3]);
+  w5[0] = hc_swap32_S (w5[0]);
+  w5[1] = hc_swap32_S (w5[1]);
+  w5[2] = hc_swap32_S (w5[2]);
+  w5[3] = hc_swap32_S (w5[3]);
+  w6[0] = hc_swap32_S (w6[0]);
+  w6[1] = hc_swap32_S (w6[1]);
+  w6[2] = hc_swap32_S (w6[2]);
+  w6[3] = hc_swap32_S (w6[3]);
+  w7[0] = hc_swap32_S (w7[0]);
+  w7[1] = hc_swap32_S (w7[1]);
+  w7[2] = hc_swap32_S (w7[2]);
+  w7[3] = hc_swap32_S (w7[3]);
+
+  sha384_update_128 (ctx, w0, w1, w2, w3, w4, w5, w6, w7, (len - pos1) * 2);
 }
 
 DECLSPEC void sha384_update_global (sha384_ctx_t *ctx, GLOBAL_AS const u32 *w, const int len)
@@ -882,25 +1133,274 @@ DECLSPEC void sha384_update_global_swap (sha384_ctx_t *ctx, GLOBAL_AS const u32 
 
 DECLSPEC void sha384_update_global_utf16le (sha384_ctx_t *ctx, GLOBAL_AS const u32 *w, const int len)
 {
-  u32 w_utf16_buf[256] = { 0 };
+  if (hc_enc_scan_global (w, len))
+  {
+    hc_enc_t hc_enc;
 
-  const int w_utf16_len = utf8_to_utf16le_global (w, len, 256, w_utf16_buf, sizeof (w_utf16_buf));
+    hc_enc_init (&hc_enc);
 
-  sha384_update (ctx, w_utf16_buf, w_utf16_len);
+    while (hc_enc_has_next (&hc_enc, len))
+    {
+      u32 enc_buf[32] = { 0 };
+
+      const int enc_len = hc_enc_next_global (&hc_enc, w, len, 256, enc_buf, sizeof (enc_buf));
+
+      sha384_update_128 (ctx, enc_buf + 0, enc_buf + 4, enc_buf + 8, enc_buf + 12, enc_buf + 16, enc_buf + 20, enc_buf + 24, enc_buf + 28, enc_len);
+    }
+
+    return;
+  }
+
+  u32 w0[4];
+  u32 w1[4];
+  u32 w2[4];
+  u32 w3[4];
+  u32 w4[4];
+  u32 w5[4];
+  u32 w6[4];
+  u32 w7[4];
+
+  int pos1;
+  int pos4;
+
+  for (pos1 = 0, pos4 = 0; pos1 < len - 64; pos1 += 64, pos4 += 16)
+  {
+    w0[0] = w[pos4 +  0];
+    w0[1] = w[pos4 +  1];
+    w0[2] = w[pos4 +  2];
+    w0[3] = w[pos4 +  3];
+    w1[0] = w[pos4 +  4];
+    w1[1] = w[pos4 +  5];
+    w1[2] = w[pos4 +  6];
+    w1[3] = w[pos4 +  7];
+    w2[0] = w[pos4 +  8];
+    w2[1] = w[pos4 +  9];
+    w2[2] = w[pos4 + 10];
+    w2[3] = w[pos4 + 11];
+    w3[0] = w[pos4 + 12];
+    w3[1] = w[pos4 + 13];
+    w3[2] = w[pos4 + 14];
+    w3[3] = w[pos4 + 15];
+
+    make_utf16le_S (w3, w6, w7);
+    make_utf16le_S (w2, w4, w5);
+    make_utf16le_S (w1, w2, w3);
+    make_utf16le_S (w0, w0, w1);
+
+    sha384_update_128 (ctx, w0, w1, w2, w3, w4, w5, w6, w7, 64 * 2);
+  }
+
+  w0[0] = w[pos4 +  0];
+  w0[1] = w[pos4 +  1];
+  w0[2] = w[pos4 +  2];
+  w0[3] = w[pos4 +  3];
+  w1[0] = w[pos4 +  4];
+  w1[1] = w[pos4 +  5];
+  w1[2] = w[pos4 +  6];
+  w1[3] = w[pos4 +  7];
+  w2[0] = w[pos4 +  8];
+  w2[1] = w[pos4 +  9];
+  w2[2] = w[pos4 + 10];
+  w2[3] = w[pos4 + 11];
+  w3[0] = w[pos4 + 12];
+  w3[1] = w[pos4 + 13];
+  w3[2] = w[pos4 + 14];
+  w3[3] = w[pos4 + 15];
+
+  make_utf16le_S (w3, w6, w7);
+  make_utf16le_S (w2, w4, w5);
+  make_utf16le_S (w1, w2, w3);
+  make_utf16le_S (w0, w0, w1);
+
+  sha384_update_128 (ctx, w0, w1, w2, w3, w4, w5, w6, w7, (len - pos1) * 2);
 }
 
 DECLSPEC void sha384_update_global_utf16le_swap (sha384_ctx_t *ctx, GLOBAL_AS const u32 *w, const int len)
 {
-  u32 w_utf16_buf[256] = { 0 };
+  if (hc_enc_scan_global (w, len))
+  {
+    hc_enc_t hc_enc;
 
-  const int w_utf16_len = utf8_to_utf16le_global (w, len, 256, w_utf16_buf, sizeof (w_utf16_buf));
+    hc_enc_init (&hc_enc);
 
-  sha384_update_swap (ctx, w_utf16_buf, w_utf16_len);
+    while (hc_enc_has_next (&hc_enc, len))
+    {
+      u32 enc_buf[32] = { 0 };
+
+      const int enc_len = hc_enc_next_global (&hc_enc, w, len, 256, enc_buf, sizeof (enc_buf));
+
+      enc_buf[ 0] = hc_swap32_S (enc_buf[ 0]);
+      enc_buf[ 1] = hc_swap32_S (enc_buf[ 1]);
+      enc_buf[ 2] = hc_swap32_S (enc_buf[ 2]);
+      enc_buf[ 3] = hc_swap32_S (enc_buf[ 3]);
+      enc_buf[ 4] = hc_swap32_S (enc_buf[ 4]);
+      enc_buf[ 5] = hc_swap32_S (enc_buf[ 5]);
+      enc_buf[ 6] = hc_swap32_S (enc_buf[ 6]);
+      enc_buf[ 7] = hc_swap32_S (enc_buf[ 7]);
+      enc_buf[ 8] = hc_swap32_S (enc_buf[ 8]);
+      enc_buf[ 9] = hc_swap32_S (enc_buf[ 9]);
+      enc_buf[10] = hc_swap32_S (enc_buf[10]);
+      enc_buf[11] = hc_swap32_S (enc_buf[11]);
+      enc_buf[12] = hc_swap32_S (enc_buf[12]);
+      enc_buf[13] = hc_swap32_S (enc_buf[13]);
+      enc_buf[14] = hc_swap32_S (enc_buf[14]);
+      enc_buf[15] = hc_swap32_S (enc_buf[15]);
+      enc_buf[16] = hc_swap32_S (enc_buf[16]);
+      enc_buf[17] = hc_swap32_S (enc_buf[17]);
+      enc_buf[18] = hc_swap32_S (enc_buf[18]);
+      enc_buf[19] = hc_swap32_S (enc_buf[19]);
+      enc_buf[20] = hc_swap32_S (enc_buf[20]);
+      enc_buf[21] = hc_swap32_S (enc_buf[21]);
+      enc_buf[22] = hc_swap32_S (enc_buf[22]);
+      enc_buf[23] = hc_swap32_S (enc_buf[23]);
+      enc_buf[24] = hc_swap32_S (enc_buf[24]);
+      enc_buf[25] = hc_swap32_S (enc_buf[25]);
+      enc_buf[26] = hc_swap32_S (enc_buf[26]);
+      enc_buf[27] = hc_swap32_S (enc_buf[27]);
+      enc_buf[28] = hc_swap32_S (enc_buf[28]);
+      enc_buf[29] = hc_swap32_S (enc_buf[29]);
+      enc_buf[30] = hc_swap32_S (enc_buf[30]);
+      enc_buf[31] = hc_swap32_S (enc_buf[31]);
+
+      sha384_update_128 (ctx, enc_buf + 0, enc_buf + 4, enc_buf + 8, enc_buf + 12, enc_buf + 16, enc_buf + 20, enc_buf + 24, enc_buf + 28, enc_len);
+    }
+
+    return;
+  }
+
+  u32 w0[4];
+  u32 w1[4];
+  u32 w2[4];
+  u32 w3[4];
+  u32 w4[4];
+  u32 w5[4];
+  u32 w6[4];
+  u32 w7[4];
+
+  int pos1;
+  int pos4;
+
+  for (pos1 = 0, pos4 = 0; pos1 < len - 64; pos1 += 64, pos4 += 16)
+  {
+    w0[0] = w[pos4 +  0];
+    w0[1] = w[pos4 +  1];
+    w0[2] = w[pos4 +  2];
+    w0[3] = w[pos4 +  3];
+    w1[0] = w[pos4 +  4];
+    w1[1] = w[pos4 +  5];
+    w1[2] = w[pos4 +  6];
+    w1[3] = w[pos4 +  7];
+    w2[0] = w[pos4 +  8];
+    w2[1] = w[pos4 +  9];
+    w2[2] = w[pos4 + 10];
+    w2[3] = w[pos4 + 11];
+    w3[0] = w[pos4 + 12];
+    w3[1] = w[pos4 + 13];
+    w3[2] = w[pos4 + 14];
+    w3[3] = w[pos4 + 15];
+
+    make_utf16le_S (w3, w6, w7);
+    make_utf16le_S (w2, w4, w5);
+    make_utf16le_S (w1, w2, w3);
+    make_utf16le_S (w0, w0, w1);
+
+    w0[0] = hc_swap32_S (w0[0]);
+    w0[1] = hc_swap32_S (w0[1]);
+    w0[2] = hc_swap32_S (w0[2]);
+    w0[3] = hc_swap32_S (w0[3]);
+    w1[0] = hc_swap32_S (w1[0]);
+    w1[1] = hc_swap32_S (w1[1]);
+    w1[2] = hc_swap32_S (w1[2]);
+    w1[3] = hc_swap32_S (w1[3]);
+    w2[0] = hc_swap32_S (w2[0]);
+    w2[1] = hc_swap32_S (w2[1]);
+    w2[2] = hc_swap32_S (w2[2]);
+    w2[3] = hc_swap32_S (w2[3]);
+    w3[0] = hc_swap32_S (w3[0]);
+    w3[1] = hc_swap32_S (w3[1]);
+    w3[2] = hc_swap32_S (w3[2]);
+    w3[3] = hc_swap32_S (w3[3]);
+    w4[0] = hc_swap32_S (w4[0]);
+    w4[1] = hc_swap32_S (w4[1]);
+    w4[2] = hc_swap32_S (w4[2]);
+    w4[3] = hc_swap32_S (w4[3]);
+    w5[0] = hc_swap32_S (w5[0]);
+    w5[1] = hc_swap32_S (w5[1]);
+    w5[2] = hc_swap32_S (w5[2]);
+    w5[3] = hc_swap32_S (w5[3]);
+    w6[0] = hc_swap32_S (w6[0]);
+    w6[1] = hc_swap32_S (w6[1]);
+    w6[2] = hc_swap32_S (w6[2]);
+    w6[3] = hc_swap32_S (w6[3]);
+    w7[0] = hc_swap32_S (w7[0]);
+    w7[1] = hc_swap32_S (w7[1]);
+    w7[2] = hc_swap32_S (w7[2]);
+    w7[3] = hc_swap32_S (w7[3]);
+
+    sha384_update_128 (ctx, w0, w1, w2, w3, w4, w5, w6, w7, 64 * 2);
+  }
+
+  w0[0] = w[pos4 +  0];
+  w0[1] = w[pos4 +  1];
+  w0[2] = w[pos4 +  2];
+  w0[3] = w[pos4 +  3];
+  w1[0] = w[pos4 +  4];
+  w1[1] = w[pos4 +  5];
+  w1[2] = w[pos4 +  6];
+  w1[3] = w[pos4 +  7];
+  w2[0] = w[pos4 +  8];
+  w2[1] = w[pos4 +  9];
+  w2[2] = w[pos4 + 10];
+  w2[3] = w[pos4 + 11];
+  w3[0] = w[pos4 + 12];
+  w3[1] = w[pos4 + 13];
+  w3[2] = w[pos4 + 14];
+  w3[3] = w[pos4 + 15];
+
+  make_utf16le_S (w3, w6, w7);
+  make_utf16le_S (w2, w4, w5);
+  make_utf16le_S (w1, w2, w3);
+  make_utf16le_S (w0, w0, w1);
+
+  w0[0] = hc_swap32_S (w0[0]);
+  w0[1] = hc_swap32_S (w0[1]);
+  w0[2] = hc_swap32_S (w0[2]);
+  w0[3] = hc_swap32_S (w0[3]);
+  w1[0] = hc_swap32_S (w1[0]);
+  w1[1] = hc_swap32_S (w1[1]);
+  w1[2] = hc_swap32_S (w1[2]);
+  w1[3] = hc_swap32_S (w1[3]);
+  w2[0] = hc_swap32_S (w2[0]);
+  w2[1] = hc_swap32_S (w2[1]);
+  w2[2] = hc_swap32_S (w2[2]);
+  w2[3] = hc_swap32_S (w2[3]);
+  w3[0] = hc_swap32_S (w3[0]);
+  w3[1] = hc_swap32_S (w3[1]);
+  w3[2] = hc_swap32_S (w3[2]);
+  w3[3] = hc_swap32_S (w3[3]);
+  w4[0] = hc_swap32_S (w4[0]);
+  w4[1] = hc_swap32_S (w4[1]);
+  w4[2] = hc_swap32_S (w4[2]);
+  w4[3] = hc_swap32_S (w4[3]);
+  w5[0] = hc_swap32_S (w5[0]);
+  w5[1] = hc_swap32_S (w5[1]);
+  w5[2] = hc_swap32_S (w5[2]);
+  w5[3] = hc_swap32_S (w5[3]);
+  w6[0] = hc_swap32_S (w6[0]);
+  w6[1] = hc_swap32_S (w6[1]);
+  w6[2] = hc_swap32_S (w6[2]);
+  w6[3] = hc_swap32_S (w6[3]);
+  w7[0] = hc_swap32_S (w7[0]);
+  w7[1] = hc_swap32_S (w7[1]);
+  w7[2] = hc_swap32_S (w7[2]);
+  w7[3] = hc_swap32_S (w7[3]);
+
+  sha384_update_128 (ctx, w0, w1, w2, w3, w4, w5, w6, w7, (len - pos1) * 2);
 }
 
 DECLSPEC void sha384_final (sha384_ctx_t *ctx)
 {
-  MAYBE_VOLATILE const int pos = ctx->len & 127;
+  const int pos = ctx->len & 127;
 
   append_0x80_8x4_S (ctx->w0, ctx->w1, ctx->w2, ctx->w3, ctx->w4, ctx->w5, ctx->w6, ctx->w7, pos ^ 3);
 
@@ -1427,6 +1927,16 @@ DECLSPEC void sha384_hmac_update_swap (sha384_hmac_ctx_t *ctx, const u32 *w, con
   sha384_update_swap (&ctx->ipad, w, len);
 }
 
+DECLSPEC void sha384_hmac_update_utf16le (sha384_hmac_ctx_t *ctx, const u32 *w, const int len)
+{
+  sha384_update_utf16le (&ctx->ipad, w, len);
+}
+
+DECLSPEC void sha384_hmac_update_utf16le_swap (sha384_hmac_ctx_t *ctx, const u32 *w, const int len)
+{
+  sha384_update_utf16le_swap (&ctx->ipad, w, len);
+}
+
 DECLSPEC void sha384_hmac_update_global (sha384_hmac_ctx_t *ctx, GLOBAL_AS const u32 *w, const int len)
 {
   sha384_update_global (&ctx->ipad, w, len);
@@ -1435,6 +1945,16 @@ DECLSPEC void sha384_hmac_update_global (sha384_hmac_ctx_t *ctx, GLOBAL_AS const
 DECLSPEC void sha384_hmac_update_global_swap (sha384_hmac_ctx_t *ctx, GLOBAL_AS const u32 *w, const int len)
 {
   sha384_update_global_swap (&ctx->ipad, w, len);
+}
+
+DECLSPEC void sha384_hmac_update_global_utf16le (sha384_hmac_ctx_t *ctx, GLOBAL_AS const u32 *w, const int len)
+{
+  sha384_update_global_utf16le (&ctx->ipad, w, len);
+}
+
+DECLSPEC void sha384_hmac_update_global_utf16le_swap (sha384_hmac_ctx_t *ctx, GLOBAL_AS const u32 *w, const int len)
+{
+  sha384_update_global_utf16le_swap (&ctx->ipad, w, len);
 }
 
 DECLSPEC void sha384_hmac_final (sha384_hmac_ctx_t *ctx)
@@ -1668,7 +2188,9 @@ DECLSPEC void sha384_init_vector_from_scalar (sha384_ctx_vector_t *ctx, sha384_c
 
 DECLSPEC void sha384_update_vector_128 (sha384_ctx_vector_t *ctx, u32x *w0, u32x *w1, u32x *w2, u32x *w3, u32x *w4, u32x *w5, u32x *w6, u32x *w7, const int len)
 {
-  MAYBE_VOLATILE const int pos = ctx->len & 127;
+  if (len == 0) return;
+
+  const int pos = ctx->len & 127;
 
   ctx->len += len;
 
@@ -2376,7 +2898,7 @@ DECLSPEC void sha384_update_vector_utf16beN (sha384_ctx_vector_t *ctx, const u32
 
 DECLSPEC void sha384_final_vector (sha384_ctx_vector_t *ctx)
 {
-  MAYBE_VOLATILE const int pos = ctx->len & 127;
+  const int pos = ctx->len & 127;
 
   append_0x80_8x4 (ctx->w0, ctx->w1, ctx->w2, ctx->w3, ctx->w4, ctx->w5, ctx->w6, ctx->w7, pos ^ 3);
 

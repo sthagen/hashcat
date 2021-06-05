@@ -209,6 +209,7 @@ typedef enum status_rc
   STATUS_ABORTED_CHECKPOINT = 10,
   STATUS_ABORTED_RUNTIME    = 11,
   STATUS_ERROR              = 13,
+  STATUS_ABORTED_FINISH     = 14,
 
 } status_rc_t;
 
@@ -441,6 +442,7 @@ typedef enum opts_type
   OPTS_TYPE_SELF_TEST_DISABLE = (1ULL << 51), // some algos use JiT in combinations with a salt or create too much startup time
   OPTS_TYPE_MP_MULTI_DISABLE  = (1ULL << 52), // do not multiply the kernel-accel with the multiprocessor count per device to allow more fine-tuned workload settings
   OPTS_TYPE_NATIVE_THREADS    = (1ULL << 53), // forces "native" thread count: CPU=1, GPU-Intel=8, GPU-AMD=64 (wavefront), GPU-NV=32 (warps)
+  OPTS_TYPE_POST_AMP_UTF16LE  = (1ULL << 54), // run the utf8 to utf16le conversion kernel after they have been processed from amplifiers
 
 } opts_type_t;
 
@@ -553,6 +555,8 @@ typedef enum parser_rc
   PARSER_FILE_SIZE            = -41,
   PARSER_IV_LENGTH            = -42,
   PARSER_CT_LENGTH            = -43,
+  PARSER_CRYPTOAPI_KERNELTYPE = -44,
+  PARSER_CRYPTOAPI_KEYSIZE    = -45,
   PARSER_HAVE_ERRNO           = -100,
   PARSER_UNKNOWN_ERROR        = -255
 
@@ -935,7 +939,7 @@ typedef struct hashes
 
 } hashes_t;
 
-struct hashconfig
+typedef struct hashconfig
 {
   char  separator;
 
@@ -1009,9 +1013,7 @@ struct hashconfig
   bool forced_jit_compile;
 
   u32 pwdump_column;
-};
-
-typedef struct hashconfig hashconfig_t;
+} hashconfig_t;
 
 typedef struct pw_pre
 {
@@ -1115,6 +1117,7 @@ typedef struct hc_device_param
   u32     kernel_wgs_tm;
   u32     kernel_wgs_memset;
   u32     kernel_wgs_atinit;
+  u32     kernel_wgs_utf8toutf16le;
   u32     kernel_wgs_decompress;
   u32     kernel_wgs_aux1;
   u32     kernel_wgs_aux2;
@@ -1139,6 +1142,7 @@ typedef struct hc_device_param
   u32     kernel_preferred_wgs_multiple_tm;
   u32     kernel_preferred_wgs_multiple_memset;
   u32     kernel_preferred_wgs_multiple_atinit;
+  u32     kernel_preferred_wgs_multiple_utf8toutf16le;
   u32     kernel_preferred_wgs_multiple_decompress;
   u32     kernel_preferred_wgs_multiple_aux1;
   u32     kernel_preferred_wgs_multiple_aux2;
@@ -1163,6 +1167,7 @@ typedef struct hc_device_param
   u64     kernel_local_mem_size_tm;
   u64     kernel_local_mem_size_memset;
   u64     kernel_local_mem_size_atinit;
+  u64     kernel_local_mem_size_utf8toutf16le;
   u64     kernel_local_mem_size_decompress;
   u64     kernel_local_mem_size_aux1;
   u64     kernel_local_mem_size_aux2;
@@ -1187,6 +1192,7 @@ typedef struct hc_device_param
   u64     kernel_dynamic_local_mem_size_tm;
   u64     kernel_dynamic_local_mem_size_memset;
   u64     kernel_dynamic_local_mem_size_atinit;
+  u64     kernel_dynamic_local_mem_size_utf8toutf16le;
   u64     kernel_dynamic_local_mem_size_decompress;
   u64     kernel_dynamic_local_mem_size_aux1;
   u64     kernel_dynamic_local_mem_size_aux2;
@@ -1347,6 +1353,7 @@ typedef struct hc_device_param
   void   *kernel_params_tm[PARAMCNT];
   void   *kernel_params_memset[PARAMCNT];
   void   *kernel_params_atinit[PARAMCNT];
+  void   *kernel_params_utf8toutf16le[PARAMCNT];
   void   *kernel_params_decompress[PARAMCNT];
 
   u32     kernel_params_buf32[PARAMCNT];
@@ -1369,6 +1376,9 @@ typedef struct hc_device_param
 
   u32     kernel_params_atinit_buf32[PARAMCNT];
   u64     kernel_params_atinit_buf64[PARAMCNT];
+
+  u32     kernel_params_utf8toutf16le_buf32[PARAMCNT];
+  u64     kernel_params_utf8toutf16le_buf64[PARAMCNT];
 
   u32     kernel_params_decompress_buf32[PARAMCNT];
   u64     kernel_params_decompress_buf64[PARAMCNT];
@@ -1409,6 +1419,7 @@ typedef struct hc_device_param
   CUfunction        cuda_function_tm;
   CUfunction        cuda_function_memset;
   CUfunction        cuda_function_atinit;
+  CUfunction        cuda_function_utf8toutf16le;
   CUfunction        cuda_function_decompress;
   CUfunction        cuda_function_aux1;
   CUfunction        cuda_function_aux2;
@@ -1419,8 +1430,6 @@ typedef struct hc_device_param
   CUdeviceptr       cuda_d_pws_amp_buf;
   CUdeviceptr       cuda_d_pws_comp_buf;
   CUdeviceptr       cuda_d_pws_idx;
-  CUdeviceptr       cuda_d_words_buf_l;
-  CUdeviceptr       cuda_d_words_buf_r;
   CUdeviceptr       cuda_d_rules;
   CUdeviceptr       cuda_d_rules_c;
   CUdeviceptr       cuda_d_combs;
@@ -1495,6 +1504,7 @@ typedef struct hc_device_param
   cl_kernel         opencl_kernel_tm;
   cl_kernel         opencl_kernel_memset;
   cl_kernel         opencl_kernel_atinit;
+  cl_kernel         opencl_kernel_utf8toutf16le;
   cl_kernel         opencl_kernel_decompress;
   cl_kernel         opencl_kernel_aux1;
   cl_kernel         opencl_kernel_aux2;
@@ -1505,8 +1515,6 @@ typedef struct hc_device_param
   cl_mem            opencl_d_pws_amp_buf;
   cl_mem            opencl_d_pws_comp_buf;
   cl_mem            opencl_d_pws_idx;
-  cl_mem            opencl_d_words_buf_l;
-  cl_mem            opencl_d_words_buf_r;
   cl_mem            opencl_d_rules;
   cl_mem            opencl_d_rules_c;
   cl_mem            opencl_d_combs;
@@ -2354,6 +2362,7 @@ typedef struct status_ctx
   bool shutdown_outer;
 
   bool checkpoint_shutdown;
+  bool finish_shutdown;
 
   hc_thread_mutex_t mux_dispatcher;
   hc_thread_mutex_t mux_counter;
@@ -2666,6 +2675,7 @@ typedef enum hash_category
   HASH_CATEGORY_PLAIN                   = 18,
   HASH_CATEGORY_FRAMEWORK               = 19,
   HASH_CATEGORY_PRIVATE_KEY             = 20,
+  HASH_CATEGORY_IMS                     = 21,
 
 } hash_category_t;
 

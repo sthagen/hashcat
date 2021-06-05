@@ -18,8 +18,8 @@
 
 static const size_t TERMINAL_LINE_LENGTH = 79;
 
-static const char *PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [c]heckpoint [q]uit => ";
-static const char *PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [c]heckpoint [q]uit => ";
+static const char *PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit => ";
+static const char *PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [c]heckpoint [f]inish [q]uit => ";
 
 void welcome_screen (hashcat_ctx_t *hashcat_ctx, const char *version_tag)
 {
@@ -284,6 +284,27 @@ static void keypress (hashcat_ctx_t *hashcat_ctx)
         else
         {
           event_log_info (hashcat_ctx, "Checkpoint disabled. Restore-point updates will no longer be monitored.");
+        }
+
+        event_log_info (hashcat_ctx, NULL);
+
+        if (quiet == false) send_prompt (hashcat_ctx);
+
+        break;
+
+      case 'f':
+
+        event_log_info (hashcat_ctx, NULL);
+
+        finish_after_attack (hashcat_ctx);
+
+        if (status_ctx->finish_shutdown == true)
+        {
+          event_log_info (hashcat_ctx, "Finish enabled. Will quit after this attack.");
+        }
+        else
+        {
+          event_log_info (hashcat_ctx, "Finish disabled. Will continue after this attack.");
         }
 
         event_log_info (hashcat_ctx, NULL);
@@ -1216,6 +1237,15 @@ void status_display (hashcat_ctx_t *hashcat_ctx)
     hashcat_status->time_estimated_relative);
   }
 
+  if (hashconfig->opti_type & OPTI_TYPE_OPTIMIZED_KERNEL)
+  {
+    event_log_info (hashcat_ctx, "Kernel.Feature...: Optimized Kernel");
+  }
+  else
+  {
+    event_log_info (hashcat_ctx, "Kernel.Feature...: Pure Kernel");
+  }
+
   switch (hashcat_status->guess_mode)
   {
     case GUESS_MODE_STRAIGHT_FILE:
@@ -1710,6 +1740,16 @@ void status_display (hashcat_ctx_t *hashcat_ctx)
       device_info->innerloop_pos_dev + device_info->innerloop_left_dev,
       device_info->iteration_pos_dev,
       device_info->iteration_pos_dev + device_info->iteration_left_dev);
+  }
+
+  //if (hashconfig->opts_type & OPTS_TYPE_SLOW_CANDIDATES)
+  if (user_options->slow_candidates == true)
+  {
+    event_log_info (hashcat_ctx, "Candidate.Engine.: Host Generator + PCIe");
+  }
+  else
+  {
+    event_log_info (hashcat_ctx, "Candidate.Engine.: Device Generator");
   }
 
   for (int device_id = 0; device_id < hashcat_status->device_info_cnt; device_id++)
