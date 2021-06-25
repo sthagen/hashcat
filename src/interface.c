@@ -259,7 +259,7 @@ int hashconfig_init (hashcat_ctx_t *hashcat_ctx)
   {
     if ((hashconfig->opts_type & OPTS_TYPE_KEYBOARD_MAPPING) == 0)
     {
-      event_log_error (hashcat_ctx, "Parameter --keyboard-layout-mapping not valid for hash-type %u", hashconfig->hash_mode);
+      if (user_options->autodetect == false) event_log_error (hashcat_ctx, "Parameter --keyboard-layout-mapping not valid for hash-type %u", hashconfig->hash_mode);
 
       return -1;
     }
@@ -288,7 +288,7 @@ int hashconfig_init (hashcat_ctx_t *hashcat_ctx)
     }
     else
     {
-      event_log_error (hashcat_ctx, "Parameter --hex-salt not valid for hash-type %u", hashconfig->hash_mode);
+      if (user_options->autodetect == false) event_log_error (hashcat_ctx, "Parameter --hex-salt not valid for hash-type %u", hashconfig->hash_mode);
 
       return -1;
     }
@@ -302,10 +302,10 @@ int hashconfig_init (hashcat_ctx_t *hashcat_ctx)
   {
     if (hashconfig->opts_type & OPTS_TYPE_SUGGEST_KG)
     {
-      if (user_options->quiet == false)
+      if (user_options->quiet == false && user_options->autodetect == false)
       {
-        event_log_warning (hashcat_ctx, "This hash-mode is known to emit multiple valid password candidates for the same hash.");
-        event_log_warning (hashcat_ctx, "Use --keep-guessing to prevent hashcat from shutdown after the hash has been cracked.");
+        event_log_warning (hashcat_ctx, "This hash-mode is known to emit multiple valid candidates for the same hash.");
+        event_log_warning (hashcat_ctx, "Use --keep-guessing to continue attack after finding the first crack.");
         event_log_warning (hashcat_ctx, NULL);
       }
     }
@@ -342,7 +342,8 @@ int hashconfig_init (hashcat_ctx_t *hashcat_ctx)
           if (user_options->quiet == false)
           {
             event_log_warning (hashcat_ctx, "Kernel %s:", source_file);
-            event_log_warning (hashcat_ctx, "Optimized kernel requested but not available or not required - falling back to pure kernel");
+            event_log_warning (hashcat_ctx, "Optimized kernel requested, but not available or not required");
+            event_log_warning (hashcat_ctx, "Falling back to pure kernel");
             event_log_warning (hashcat_ctx, NULL);
           }
         }
@@ -494,20 +495,21 @@ void hashconfig_destroy (hashcat_ctx_t *hashcat_ctx)
     }
   }
 
-  if (hashconfig->hook_extra_param_size)
+  if (module_ctx->hook_extra_params)
   {
-    const int hook_threads = (int) user_options->hook_threads;
-
-    for (int i = 0; i < hook_threads; i++)
+    if (hashconfig->hook_extra_param_size)
     {
-      hcfree (module_ctx->hook_extra_params[i]);
-    }
+      const int hook_threads = (int) user_options->hook_threads;
 
-    hcfree (module_ctx->hook_extra_params);
-  }
-  else
-  {
-    hcfree (module_ctx->hook_extra_params[0]);
+      for (int i = 0; i < hook_threads; i++)
+      {
+        hcfree (module_ctx->hook_extra_params[i]);
+      }
+    }
+    else
+    {
+      hcfree (module_ctx->hook_extra_params[0]);
+    }
 
     hcfree (module_ctx->hook_extra_params);
   }

@@ -17,7 +17,7 @@ static const u32   DGST_POS1      = 1;
 static const u32   DGST_POS2      = 2;
 static const u32   DGST_POS3      = 3;
 static const u32   DGST_SIZE      = DGST_SIZE_4_8;
-static const u32   HASH_CATEGORY  = HASH_CATEGORY_PASSWORD_MANAGER;
+static const u32   HASH_CATEGORY  = HASH_CATEGORY_CRYPTOCURRENCY_WALLET;
 static const char *HASH_NAME      = "Ethereum Wallet, SCRYPT";
 static const u64   KERN_TYPE      = 15700;
 static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE;
@@ -254,11 +254,6 @@ u64 module_extra_tmp_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UN
   const u64 tmp_size = 128ULL * scrypt_r * scrypt_p;
 
   return tmp_size;
-}
-
-bool module_jit_cache_disable (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra, MAYBE_UNUSED const hashes_t *hashes, MAYBE_UNUSED const hc_device_param_t *device_param)
-{
-  return true;
 }
 
 bool module_warmup_disable (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
@@ -504,7 +499,7 @@ void module_init (module_ctx_t *module_ctx)
   module_ctx->module_hook_salt_size           = MODULE_DEFAULT;
   module_ctx->module_hook_size                = MODULE_DEFAULT;
   module_ctx->module_jit_build_options        = module_jit_build_options;
-  module_ctx->module_jit_cache_disable        = module_jit_cache_disable;
+  module_ctx->module_jit_cache_disable        = MODULE_DEFAULT;
   module_ctx->module_kernel_accel_max         = MODULE_DEFAULT;
   module_ctx->module_kernel_accel_min         = MODULE_DEFAULT;
   module_ctx->module_kernel_loops_max         = module_kernel_loops_max;

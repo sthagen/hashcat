@@ -131,6 +131,17 @@ static int backend_ctx_find_alias_devices (hashcat_ctx_t *hashcat_ctx)
       backend_ctx->opencl_devices_active--;
 
       backend_ctx->backend_devices_active--;
+
+      // show a warning for specifically listed devices if they are an alias
+
+      if (backend_ctx->backend_devices_filter != (u64) -1)
+      {
+        if (backend_ctx->backend_devices_filter & (1ULL << alias_device->device_id))
+        {
+          event_log_warning (hashcat_ctx, "The device #%d specifically listed was skipped because it is an alias of device #%d", alias_device->device_id + 1, backend_device->device_id + 1);
+          event_log_warning (hashcat_ctx, NULL);
+        }
+      }
     }
   }
 
@@ -616,7 +627,7 @@ void generate_source_kernel_filename (const bool slow_candidates, const u32 atta
   }
 }
 
-void generate_cached_kernel_filename (const bool slow_candidates, const u32 attack_exec, const u32 attack_kern, const u32 kern_type, const u32 opti_type, char *profile_dir, const char *device_name_chksum, char *cached_file)
+void generate_cached_kernel_filename (const bool slow_candidates, const u32 attack_exec, const u32 attack_kern, const u32 kern_type, const u32 opti_type, char *cache_dir, const char *device_name_chksum, char *cached_file)
 {
   if (opti_type & OPTI_TYPE_OPTIMIZED_KERNEL)
   {
@@ -624,23 +635,23 @@ void generate_cached_kernel_filename (const bool slow_candidates, const u32 atta
     {
       if (slow_candidates == true)
       {
-        snprintf (cached_file, 255, "%s/kernels/m%05d_a0-optimized.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+        snprintf (cached_file, 255, "%s/kernels/m%05d_a0-optimized.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
       }
       else
       {
         if (attack_kern == ATTACK_KERN_STRAIGHT)
-          snprintf (cached_file, 255, "%s/kernels/m%05d_a0-optimized.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+          snprintf (cached_file, 255, "%s/kernels/m%05d_a0-optimized.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
         else if (attack_kern == ATTACK_KERN_COMBI)
-          snprintf (cached_file, 255, "%s/kernels/m%05d_a1-optimized.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+          snprintf (cached_file, 255, "%s/kernels/m%05d_a1-optimized.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
         else if (attack_kern == ATTACK_KERN_BF)
-          snprintf (cached_file, 255, "%s/kernels/m%05d_a3-optimized.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+          snprintf (cached_file, 255, "%s/kernels/m%05d_a3-optimized.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
         else if (attack_kern == ATTACK_KERN_NONE)
-          snprintf (cached_file, 255, "%s/kernels/m%05d_a0-optimized.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+          snprintf (cached_file, 255, "%s/kernels/m%05d_a0-optimized.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
       }
     }
     else
     {
-      snprintf (cached_file, 255, "%s/kernels/m%05d-optimized.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+      snprintf (cached_file, 255, "%s/kernels/m%05d-optimized.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
     }
   }
   else
@@ -649,23 +660,23 @@ void generate_cached_kernel_filename (const bool slow_candidates, const u32 atta
     {
       if (slow_candidates == true)
       {
-        snprintf (cached_file, 255, "%s/kernels/m%05d_a0-pure.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+        snprintf (cached_file, 255, "%s/kernels/m%05d_a0-pure.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
       }
       else
       {
         if (attack_kern == ATTACK_KERN_STRAIGHT)
-          snprintf (cached_file, 255, "%s/kernels/m%05d_a0-pure.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+          snprintf (cached_file, 255, "%s/kernels/m%05d_a0-pure.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
         else if (attack_kern == ATTACK_KERN_COMBI)
-          snprintf (cached_file, 255, "%s/kernels/m%05d_a1-pure.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+          snprintf (cached_file, 255, "%s/kernels/m%05d_a1-pure.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
         else if (attack_kern == ATTACK_KERN_BF)
-          snprintf (cached_file, 255, "%s/kernels/m%05d_a3-pure.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+          snprintf (cached_file, 255, "%s/kernels/m%05d_a3-pure.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
         else if (attack_kern == ATTACK_KERN_NONE)
-          snprintf (cached_file, 255, "%s/kernels/m%05d_a0-pure.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+          snprintf (cached_file, 255, "%s/kernels/m%05d_a0-pure.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
       }
     }
     else
     {
-      snprintf (cached_file, 255, "%s/kernels/m%05d-pure.%s.kernel", profile_dir, (int) kern_type, device_name_chksum);
+      snprintf (cached_file, 255, "%s/kernels/m%05d-pure.%s.kernel", cache_dir, (int) kern_type, device_name_chksum);
     }
   }
 }
@@ -675,9 +686,9 @@ void generate_source_kernel_shared_filename (char *shared_dir, char *source_file
   snprintf (source_file, 255, "%s/OpenCL/shared.cl", shared_dir);
 }
 
-void generate_cached_kernel_shared_filename (char *profile_dir, const char *device_name_chksum_amp_mp, char *cached_file)
+void generate_cached_kernel_shared_filename (char *cache_dir, const char *device_name_chksum_amp_mp, char *cached_file)
 {
-  snprintf (cached_file, 255, "%s/kernels/shared.%s.kernel", profile_dir, device_name_chksum_amp_mp);
+  snprintf (cached_file, 255, "%s/kernels/shared.%s.kernel", cache_dir, device_name_chksum_amp_mp);
 }
 
 void generate_source_kernel_mp_filename (const u32 opti_type, const u64 opts_type, char *shared_dir, char *source_file)
@@ -692,15 +703,15 @@ void generate_source_kernel_mp_filename (const u32 opti_type, const u64 opts_typ
   }
 }
 
-void generate_cached_kernel_mp_filename (const u32 opti_type, const u64 opts_type, char *profile_dir, const char *device_name_chksum_amp_mp, char *cached_file)
+void generate_cached_kernel_mp_filename (const u32 opti_type, const u64 opts_type, char *cache_dir, const char *device_name_chksum_amp_mp, char *cached_file)
 {
   if ((opti_type & OPTI_TYPE_BRUTE_FORCE) && (opts_type & OPTS_TYPE_PT_GENERATE_BE))
   {
-    snprintf (cached_file, 255, "%s/kernels/markov_be.%s.kernel", profile_dir, device_name_chksum_amp_mp);
+    snprintf (cached_file, 255, "%s/kernels/markov_be.%s.kernel", cache_dir, device_name_chksum_amp_mp);
   }
   else
   {
-    snprintf (cached_file, 255, "%s/kernels/markov_le.%s.kernel", profile_dir, device_name_chksum_amp_mp);
+    snprintf (cached_file, 255, "%s/kernels/markov_le.%s.kernel", cache_dir, device_name_chksum_amp_mp);
   }
 }
 
@@ -709,9 +720,9 @@ void generate_source_kernel_amp_filename (const u32 attack_kern, char *shared_di
   snprintf (source_file, 255, "%s/OpenCL/amp_a%u.cl", shared_dir, attack_kern);
 }
 
-void generate_cached_kernel_amp_filename (const u32 attack_kern, char *profile_dir, const char *device_name_chksum_amp_mp, char *cached_file)
+void generate_cached_kernel_amp_filename (const u32 attack_kern, char *cache_dir, const char *device_name_chksum_amp_mp, char *cached_file)
 {
-  snprintf (cached_file, 255, "%s/kernels/amp_a%u.%s.kernel", profile_dir, attack_kern, device_name_chksum_amp_mp);
+  snprintf (cached_file, 255, "%s/kernels/amp_a%u.%s.kernel", cache_dir, attack_kern, device_name_chksum_amp_mp);
 }
 
 // NVRTC
@@ -3017,6 +3028,28 @@ int choose_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param, 
   }
   else
   {
+    // innerloop prediction to get a speed estimation is hard, because we don't know in advance how much
+    // time the different kernels take and if their weightnings are equally distributed.
+    // - for instance, a regular _loop kernel is likely to be the slowest, but _loop2 kernel can also be slow.
+    //   in fact, _loop2 can be even slower (see iTunes backup >= 10.0).
+    // - hooks can have a large influence depending on the OS.
+    //   spawning threads and memory allocations take a lot of time on windows (compared to linux).
+    // - the kernel execution can take shortcuts based on intermediate values
+    //   while these intermediate valus depend on input values.
+    // - if we meassure runtimes of different kernels to find out about their weightning
+    //   we need to call them with real input values otherwise we miss the shortcuts inside the kernel.
+    // - the problem is that these real input values could crack the hash which makes the chaos perfect.
+    //
+    // so the innerloop prediction is not perfectly accurate, because we:
+    //
+    // 1. completely ignore hooks and the time they take.
+    // 2. assume that the code in _loop and _loop2 is similar,
+    //    but we respect the different iteration counts in _loop and _loop2.
+    // 3. ignore _comp kernel runtimes (probably irrelevant).
+    //
+    // as soon as the first restore checkpoint is reached the prediction is accurate.
+    // also the closer it gets to that point.
+
     if (true)
     {
       if (device_param->is_cuda == true)
@@ -3160,7 +3193,10 @@ int choose_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param, 
              * speed
              */
 
-            const float iter_part = (float) (loop_pos + loop_left) / iter;
+            const u32 iter1r = hashes->salts_buf[salt_pos].salt_iter  * (salt_repeats + 1);
+            const u32 iter2r = hashes->salts_buf[salt_pos].salt_iter2 * (salt_repeats + 1);
+
+            const double iter_part = (double) ((iter * salt_repeat) + loop_pos + loop_left) / (double) (iter1r + iter2r);
 
             const u64 perf_sum_all = (u64) (pws_cnt * iter_part);
 
@@ -3176,7 +3212,7 @@ int choose_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param, 
             {
               if (speed_msec > 4000)
               {
-                device_param->outerloop_multi *= (double) iter / (double) (loop_pos + loop_left);
+                device_param->outerloop_multi *= 1 / iter_part;
 
                 device_param->speed_pos = 1;
 
@@ -3295,6 +3331,25 @@ int choose_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param, 
             //bug?
             //while (status_ctx->run_thread_level2 == false) break;
             if (status_ctx->run_thread_level2 == false) break;
+
+            /**
+             * speed
+             */
+
+            const u32 iter1r = hashes->salts_buf[salt_pos].salt_iter  * (salt_repeats + 1);
+            const u32 iter2r = hashes->salts_buf[salt_pos].salt_iter2 * (salt_repeats + 1);
+
+            const double iter_part = (double) (iter1r + (iter * salt_repeat) + loop_pos + loop_left) / (double) (iter1r + iter2r);
+
+            const u64 perf_sum_all = (u64) (pws_cnt * iter_part);
+
+            double speed_msec = hc_timer_get (device_param->timer_speed);
+
+            const u32 speed_pos = device_param->speed_pos;
+
+            device_param->speed_cnt[speed_pos] = perf_sum_all;
+
+            device_param->speed_msec[speed_pos] = speed_msec;
           }
         }
       }
@@ -5113,12 +5168,13 @@ int backend_ctx_init (hashcat_ctx_t *hashcat_ctx)
 
   backend_ctx->enabled = false;
 
-  if (user_options->hash_info      == true) return 0;
-  if (user_options->keyspace       == true) return 0;
-  if (user_options->left           == true) return 0;
-  if (user_options->show           == true) return 0;
-  if (user_options->usage          == true) return 0;
-  if (user_options->version        == true) return 0;
+  if (user_options->hash_info == true) return 0;
+  if (user_options->keyspace  == true) return 0;
+  if (user_options->left      == true) return 0;
+  if (user_options->show      == true) return 0;
+  if (user_options->usage     == true) return 0;
+  if (user_options->version   == true) return 0;
+  if (user_options->identify  == true) return 0;
 
   hc_device_param_t *devices_param = (hc_device_param_t *) hccalloc (DEVICES_MAX, sizeof (hc_device_param_t));
 
@@ -5608,6 +5664,7 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
   bool need_nvml    = false;
   bool need_nvapi   = false;
   bool need_sysfs   = false;
+  bool need_iokit   = false;
 
   int backend_devices_idx = 0;
 
@@ -5856,10 +5913,12 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
         device_param->skipped = true;
       }
 
+      #if !defined (__APPLE__)
       if ((backend_ctx->opencl_device_types_filter & CL_DEVICE_TYPE_GPU) == 0)
       {
         device_param->skipped = true;
       }
+      #endif
 
       if ((device_param->opencl_platform_vendor_id == VENDOR_ID_NV) && (device_param->opencl_device_vendor_id == VENDOR_ID_NV))
       {
@@ -6496,8 +6555,8 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
               {
                 event_log_error (hashcat_ctx, "* Device #%u: Outdated POCL OpenCL driver detected!", device_id + 1);
 
-                if (user_options->quiet == false) event_log_warning (hashcat_ctx, "This OpenCL driver has been marked as likely to fail kernel compilation or to produce false negatives.");
-                if (user_options->quiet == false) event_log_warning (hashcat_ctx, "You can use --force to override this, but do not report related errors.");
+                if (user_options->quiet == false) event_log_warning (hashcat_ctx, "This OpenCL driver may fail kernel compilation or produce false negatives.");
+                if (user_options->quiet == false) event_log_warning (hashcat_ctx, "You can use --force to override, but do not report related errors.");
                 if (user_options->quiet == false) event_log_warning (hashcat_ctx, NULL);
 
                 device_param->skipped = true;
@@ -6525,8 +6584,8 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
           {
             event_log_error (hashcat_ctx, "* Device #%u: Unstable OpenCL driver detected!", device_id + 1);
 
-            if (user_options->quiet == false) event_log_warning (hashcat_ctx, "This OpenCL driver has been marked as likely to fail kernel compilation or to produce false negatives.");
-            if (user_options->quiet == false) event_log_warning (hashcat_ctx, "You can use --force to override this, but do not report related errors.");
+            if (user_options->quiet == false) event_log_warning (hashcat_ctx, "This OpenCL driver may fail kernel compilation or produce false negatives.");
+            if (user_options->quiet == false) event_log_warning (hashcat_ctx, "You can use --force to override, but do not report related errors.");
             if (user_options->quiet == false) event_log_warning (hashcat_ctx, NULL);
 
             device_param->skipped = true;
@@ -6584,9 +6643,9 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
           {
             if (user_options->quiet == false) event_log_warning (hashcat_ctx, "* Device #%u: Apple's OpenCL drivers (GPU) are known to be unreliable.", device_id + 1);
             if (user_options->quiet == false) event_log_warning (hashcat_ctx, "             You have been warned.");
-            //if (user_options->quiet == false) event_log_warning (hashcat_ctx, "             There are many reports of false negatives and other issues.");
-            //if (user_options->quiet == false) event_log_warning (hashcat_ctx, "             This is not a hashcat specific issue. Many other projects suffer from the bad quality of these drivers.");
-            //if (user_options->quiet == false) event_log_warning (hashcat_ctx, "             You can use --force to override, but do not report related errors. You have been warned.");
+            //if (user_options->quiet == false) event_log_warning (hashcat_ctx, "  There are many reports of false negatives and other issues.");
+            //if (user_options->quiet == false) event_log_warning (hashcat_ctx, "  This is not a hashcat issue. Other projects report issues with these drivers.");
+            //if (user_options->quiet == false) event_log_warning (hashcat_ctx, "  You can use --force to override, but do not report related errors. You have been warned.");
             if (user_options->quiet == false) event_log_warning (hashcat_ctx, NULL);
 
             //device_param->skipped = true;
@@ -6613,6 +6672,13 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
         device_param->opencl_driver_version = opencl_driver_version;
 
         // vendor specific
+
+        #if defined (__APPLE__)
+        if (device_param->opencl_platform_vendor_id == VENDOR_ID_APPLE)
+        {
+          if (device_param->skipped == false) need_iokit = true;
+        }
+        #endif
 
         if (device_param->opencl_device_type & CL_DEVICE_TYPE_GPU)
         {
@@ -6740,9 +6806,9 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
                     event_log_warning (hashcat_ctx, NULL);
                   }
 
-                  event_log_warning (hashcat_ctx, "* Device #%u: CUDA SDK Toolkit installation NOT detected or incorrectly installed.", device_id + 1);
-                  event_log_warning (hashcat_ctx, "             CUDA SDK Toolkit installation required for proper device support and utilization");
-                  event_log_warning (hashcat_ctx, "             Falling back to OpenCL Runtime");
+                  event_log_warning (hashcat_ctx, "* Device #%u: CUDA SDK Toolkit not installed or incorrectly installed.", device_id + 1);
+                  event_log_warning (hashcat_ctx, "             CUDA SDK Toolkit required for proper device support and utilization.");
+                  event_log_warning (hashcat_ctx, "             Falling back to OpenCL runtime.");
 
                   event_log_warning (hashcat_ctx, NULL);
                 }
@@ -6814,8 +6880,8 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
                 {
                   event_log_error (hashcat_ctx, "* Device #%u: Outdated or broken Intel OpenCL runtime '%s' detected!", device_id + 1, device_param->opencl_driver_version);
 
-                  event_log_warning (hashcat_ctx, "You are STRONGLY encouraged to use the officially supported Intel OpenCL runtime.");
-                  event_log_warning (hashcat_ctx, "See hashcat.net for officially supported Intel OpenCL runtime.");
+                  event_log_warning (hashcat_ctx, "You are STRONGLY encouraged to use the officially supported runtime.");
+                  event_log_warning (hashcat_ctx, "See hashcat.net for the officially supported Intel OpenCL runtime.");
                   event_log_warning (hashcat_ctx, "See also: https://hashcat.net/faq/wrongdriver");
                   event_log_warning (hashcat_ctx, "You can use --force to override this, but do not report related errors.");
                   event_log_warning (hashcat_ctx, NULL);
@@ -6853,7 +6919,7 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
                 {
                   event_log_error (hashcat_ctx, "* Device #%u: Outdated or broken AMD driver '%s' detected!", device_id + 1, device_param->opencl_driver_version);
 
-                  event_log_warning (hashcat_ctx, "You are STRONGLY encouraged to use the officially supported AMD driver.");
+                  event_log_warning (hashcat_ctx, "You are STRONGLY encouraged to use the officially supported driver.");
                   event_log_warning (hashcat_ctx, "See hashcat.net for officially supported AMD drivers.");
                   event_log_warning (hashcat_ctx, "See also: https://hashcat.net/faq/wrongdriver");
                   event_log_warning (hashcat_ctx, "You can use --force to override this, but do not report related errors.");
@@ -6903,7 +6969,7 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
                   event_log_warning (hashcat_ctx, "* Device #%u: Outdated or broken NVIDIA driver '%s' detected!", device_id + 1, device_param->opencl_driver_version);
                   event_log_warning (hashcat_ctx, NULL);
 
-                  event_log_warning (hashcat_ctx, "You are STRONGLY encouraged to use the officially supported NVIDIA driver.");
+                  event_log_warning (hashcat_ctx, "You are STRONGLY encouraged to use the officially supported driver.");
                   event_log_warning (hashcat_ctx, "See hashcat's homepage for officially supported NVIDIA drivers.");
                   event_log_warning (hashcat_ctx, "See also: https://hashcat.net/faq/wrongdriver");
                   event_log_warning (hashcat_ctx, "You can use --force to override this, but do not report related errors.");
@@ -7059,7 +7125,12 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
 
       if (device_param->is_opencl == false) continue;
 
-      if (device_param->skipped == true) continue;
+      if (user_options->backend_info == false)
+      {
+        // do not ignore in case -I because user expects a value also for skipped devices
+
+        if (device_param->skipped == true) continue;
+      }
 
       /**
        * create context for each device
@@ -7283,6 +7354,7 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
   backend_ctx->need_nvml    = need_nvml;
   backend_ctx->need_nvapi   = need_nvapi;
   backend_ctx->need_sysfs   = need_sysfs;
+  backend_ctx->need_iokit   = need_iokit;
 
   backend_ctx->comptime     = comptime;
 
@@ -7642,7 +7714,8 @@ static u32 get_kernel_threads (const hc_device_param_t *device_param)
 
 static bool load_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param, const char *kernel_name, char *source_file, char *cached_file, const char *build_options_buf, const bool cache_disable, cl_program *opencl_program, CUmodule *cuda_module)
 {
-  const hashconfig_t *hashconfig = hashcat_ctx->hashconfig;
+  const hashconfig_t    *hashconfig    = hashcat_ctx->hashconfig;
+  const folder_config_t *folder_config = hashcat_ctx->folder_config;
 
   bool cached = true;
 
@@ -7678,7 +7751,7 @@ static bool load_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_p
     #if defined (DEBUG)
     const user_options_t *user_options = hashcat_ctx->user_options;
 
-    if (user_options->quiet == false) event_log_warning (hashcat_ctx, "* Device #%u: Kernel %s not found in cache! Building may take a while...", device_param->device_id + 1, filename_from_filepath (cached_file));
+    if (user_options->quiet == false) event_log_warning (hashcat_ctx, "* Device #%u: Kernel %s not found in cache. Please be patient...", device_param->device_id + 1, filename_from_filepath (cached_file));
     #endif
 
     if (read_kernel_binary (hashcat_ctx, source_file, kernel_lengths, kernel_sources) == false) return false;
@@ -7689,7 +7762,7 @@ static bool load_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_p
 
       if (hc_nvrtcCreateProgram (hashcat_ctx, &program, kernel_sources[0], kernel_name, 0, NULL, NULL) == -1) return false;
 
-      char **nvrtc_options = (char **) hccalloc (4 + strlen (build_options_buf) + 1, sizeof (char *)); // ...
+      char **nvrtc_options = (char **) hccalloc (6 + strlen (build_options_buf) + 1, sizeof (char *)); // ...
 
       nvrtc_options[0] = "--restrict";
       nvrtc_options[1] = "--device-as-default-execution-space";
@@ -7697,9 +7770,12 @@ static bool load_kernel (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_p
 
       hc_asprintf (&nvrtc_options[3], "compute_%d%d", device_param->sm_major, device_param->sm_minor);
 
+      nvrtc_options[4] = "-I";
+      nvrtc_options[5] = folder_config->cpath_real;
+
       char *nvrtc_options_string = hcstrdup (build_options_buf);
 
-      const int num_options = 4 + nvrtc_make_options_array_from_string (nvrtc_options_string, nvrtc_options + 4);
+      const int num_options = 6 + nvrtc_make_options_array_from_string (nvrtc_options_string, nvrtc_options + 6);
 
       const int rc_nvrtcCompileProgram = hc_nvrtcCompileProgram (hashcat_ctx, program, num_options, (const char * const *) nvrtc_options);
 
@@ -8090,7 +8166,8 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
 
       if ((unstable_warning == true) && (user_options->force == false))
       {
-        event_log_warning (hashcat_ctx, "* Device #%u: Skipping hash-mode %u - known CUDA/OpenCL Runtime/Driver issue (not a hashcat issue)", device_id + 1, hashconfig->hash_mode);
+        event_log_warning (hashcat_ctx, "* Device #%u: Skipping hash-mode %u)", device_id + 1, hashconfig->hash_mode);
+        event_log_warning (hashcat_ctx, "             This is due to a known CUDA/OpenCL runtime/driver issue (not a hashcat issue)");
         event_log_warning (hashcat_ctx, "             You can use --force to override, but do not report related errors.");
 
         device_param->skipped_warning = true;
@@ -8573,11 +8650,17 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
 
     int build_options_len = 0;
 
-    #if defined (_WIN)
-    build_options_len += snprintf (build_options_buf + build_options_len, build_options_sz - build_options_len, "-D KERNEL_STATIC -I OpenCL -I \"%s\" ", folder_config->cpath_real);
-    #else
-    build_options_len += snprintf (build_options_buf + build_options_len, build_options_sz - build_options_len, "-D KERNEL_STATIC -I OpenCL -I %s ", folder_config->cpath_real);
-    #endif
+    if (device_param->is_cuda == true)
+    {
+      // using a path with a space will break nvrtc_make_options_array_from_string()
+      // we add it to options array in a clean way later
+
+      build_options_len += snprintf (build_options_buf + build_options_len, build_options_sz - build_options_len, "-D KERNEL_STATIC -I OpenCL ");
+    }
+    else
+    {
+      build_options_len += snprintf (build_options_buf + build_options_len, build_options_sz - build_options_len, "-D KERNEL_STATIC -I OpenCL -I \"%s\" ", folder_config->cpath_real);
+    }
 
     /* currently disabled, hangs NEO drivers since 20.09.
        was required for NEO driver 20.08 to workaround the same issue!
@@ -8625,28 +8708,10 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
     #endif
 
     /**
-     * device_name_chksum
+     * device_name_chksum_amp_mp
      */
 
-    char *device_name_chksum        = (char *) hcmalloc (HCBUFSIZ_TINY);
     char *device_name_chksum_amp_mp = (char *) hcmalloc (HCBUFSIZ_TINY);
-
-    // The kernel source can depend on some JiT compiler macros which themself depend on the attack_modes.
-    // ATM this is relevant only for ATTACK_MODE_ASSOCIATION which slightly modifies ATTACK_MODE_STRAIGHT kernels.
-
-    const u32 extra_value = (user_options->attack_mode == ATTACK_MODE_ASSOCIATION) ? ATTACK_MODE_ASSOCIATION : ATTACK_MODE_NONE;
-
-    const size_t dnclen = snprintf (device_name_chksum, HCBUFSIZ_TINY, "%d-%d-%d-%u-%s-%s-%s-%d-%u-%u",
-      backend_ctx->comptime,
-      backend_ctx->cuda_driver_version,
-      device_param->is_opencl,
-      device_param->opencl_platform_vendor_id,
-      device_param->device_name,
-      device_param->opencl_device_version,
-      device_param->opencl_driver_version,
-      device_param->vector_width,
-      hashconfig->kern_type,
-      extra_value);
 
     const size_t dnclen_amp_mp = snprintf (device_name_chksum_amp_mp, HCBUFSIZ_TINY, "%d-%d-%d-%u-%s-%s-%s",
       backend_ctx->comptime,
@@ -8658,12 +8723,6 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
       device_param->opencl_driver_version);
 
     md5_ctx_t md5_ctx;
-
-    md5_init   (&md5_ctx);
-    md5_update (&md5_ctx, (u32 *) device_name_chksum, dnclen);
-    md5_final  (&md5_ctx);
-
-    snprintf (device_name_chksum, HCBUFSIZ_TINY, "%08x", md5_ctx.h[0]);
 
     md5_init   (&md5_ctx);
     md5_update (&md5_ctx, (u32 *) device_name_chksum_amp_mp, dnclen_amp_mp);
@@ -8724,7 +8783,7 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
 
       char cached_file[256] = { 0 };
 
-      generate_cached_kernel_shared_filename (folder_config->profile_dir, device_name_chksum_amp_mp, cached_file);
+      generate_cached_kernel_shared_filename (folder_config->cache_dir, device_name_chksum_amp_mp, cached_file);
 
       const bool rc_load_kernel = load_kernel (hashcat_ctx, device_param, "shared_kernel", source_file, cached_file, build_options_buf, cache_disable, &device_param->opencl_program_shared, &device_param->cuda_module_shared);
 
@@ -8884,6 +8943,38 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
       #endif
 
       /**
+       * device_name_chksum
+       */
+
+      char *device_name_chksum = (char *) hcmalloc (HCBUFSIZ_TINY);
+
+      // The kernel source can depend on some JiT compiler macros which themself depend on the attack_modes.
+      // ATM this is relevant only for ATTACK_MODE_ASSOCIATION which slightly modifies ATTACK_MODE_STRAIGHT kernels.
+
+      const u32 extra_value = (user_options->attack_mode == ATTACK_MODE_ASSOCIATION) ? ATTACK_MODE_ASSOCIATION : ATTACK_MODE_NONE;
+
+      const size_t dnclen = snprintf (device_name_chksum, HCBUFSIZ_TINY, "%d-%d-%d-%u-%s-%s-%s-%d-%u-%u-%s",
+        backend_ctx->comptime,
+        backend_ctx->cuda_driver_version,
+        device_param->is_opencl,
+        device_param->opencl_platform_vendor_id,
+        device_param->device_name,
+        device_param->opencl_device_version,
+        device_param->opencl_driver_version,
+        device_param->vector_width,
+        hashconfig->kern_type,
+        extra_value,
+        build_options_module_buf);
+
+      md5_ctx_t md5_ctx;
+
+      md5_init   (&md5_ctx);
+      md5_update (&md5_ctx, (u32 *) device_name_chksum, dnclen);
+      md5_final  (&md5_ctx);
+
+      snprintf (device_name_chksum, HCBUFSIZ_TINY, "%08x", md5_ctx.h[0]);
+
+      /**
        * kernel source filename
        */
 
@@ -8904,7 +8995,7 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
 
       char cached_file[256] = { 0 };
 
-      generate_cached_kernel_filename (user_options->slow_candidates, hashconfig->attack_exec, user_options_extra->attack_kern, kern_type, hashconfig->opti_type, folder_config->profile_dir, device_name_chksum, cached_file);
+      generate_cached_kernel_filename (user_options->slow_candidates, hashconfig->attack_exec, user_options_extra->attack_kern, kern_type, hashconfig->opti_type, folder_config->cache_dir, device_name_chksum, cached_file);
 
       /**
        * load kernel
@@ -8920,6 +9011,8 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
       }
 
       hcfree (build_options_module_buf);
+
+      hcfree (device_name_chksum);
     }
 
     /**
@@ -8954,7 +9047,7 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
 
         char cached_file[256] = { 0 };
 
-        generate_cached_kernel_mp_filename (hashconfig->opti_type, hashconfig->opts_type, folder_config->profile_dir, device_name_chksum_amp_mp, cached_file);
+        generate_cached_kernel_mp_filename (hashconfig->opti_type, hashconfig->opts_type, folder_config->cache_dir, device_name_chksum_amp_mp, cached_file);
 
         const bool rc_load_kernel = load_kernel (hashcat_ctx, device_param, "mp_kernel", source_file, cached_file, build_options_buf, cache_disable, &device_param->opencl_program_mp, &device_param->cuda_module_mp);
 
@@ -9003,7 +9096,7 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
 
         char cached_file[256] = { 0 };
 
-        generate_cached_kernel_amp_filename (user_options_extra->attack_kern, folder_config->profile_dir, device_name_chksum_amp_mp, cached_file);
+        generate_cached_kernel_amp_filename (user_options_extra->attack_kern, folder_config->cache_dir, device_name_chksum_amp_mp, cached_file);
 
         const bool rc_load_kernel = load_kernel (hashcat_ctx, device_param, "amp_kernel", source_file, cached_file, build_options_buf, cache_disable, &device_param->opencl_program_amp, &device_param->cuda_module_amp);
 
@@ -9031,7 +9124,6 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
       if (hc_clUnloadPlatformCompiler (hashcat_ctx, platform_id) == -1) return -1;
     }
 
-    hcfree (device_name_chksum);
     hcfree (device_name_chksum_amp_mp);
 
     // some algorithm collide too fast, make that impossible
@@ -9075,7 +9167,7 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
 
     if (size_total_fixed > device_param->device_available_mem)
     {
-      event_log_error (hashcat_ctx, "* Device #%u: Not enough allocatable device memory for this hashlist and/or ruleset.", device_id + 1);
+      event_log_error (hashcat_ctx, "* Device #%u: Not enough allocatable device memory for this hashlist/ruleset.", device_id + 1);
 
       return -1;
     }
@@ -10835,7 +10927,8 @@ int backend_session_begin (hashcat_ctx_t *hashcat_ctx)
 
     if (kernel_accel_min > kernel_accel_max)
     {
-      event_log_error (hashcat_ctx, "* Device #%u: Too many compute units to keep minimum kernel accel limit. Retry with lower --backend-kernel-threads value.", device_id + 1);
+      event_log_error (hashcat_ctx, "* Device #%u: Too many compute units to keep minimum kernel accel limit.", device_id + 1);
+      event_log_error (hashcat_ctx, "             Retry with lower --backend-kernel-threads value.");
 
       return -1;
     }

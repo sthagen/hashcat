@@ -26,7 +26,7 @@ static const char *const USAGE_BIG_PRE_HASHMODES[] =
   "",
   " Options Short / Long           | Type | Description                                          | Example",
   "================================+======+======================================================+=======================",
-  " -m, --hash-type                | Num  | Hash-type, see references below                      | -m 1000",
+  " -m, --hash-type                | Num  | Hash-type, references below (otherwise autodetect)   | -m 1000",
   " -a, --attack-mode              | Num  | Attack-mode, see references below                    | -a 3",
   " -V, --version                  |      | Print version                                        |",
   " -h, --help                     |      | Print help                                           |",
@@ -120,6 +120,7 @@ static const char *const USAGE_BIG_PRE_HASHMODES[] =
   " -2, --custom-charset2          | CS   | User-defined charset ?2                              | -2 ?l?d?s",
   " -3, --custom-charset3          | CS   | User-defined charset ?3                              |",
   " -4, --custom-charset4          | CS   | User-defined charset ?4                              |",
+  "     --identify                 |      | Shows all supported algorithms for input hashes      | --identify my.hash",
   " -i, --increment                |      | Enable mask increment mode                           |",
   "     --increment-min            | Num  | Start mask incrementing at X                         | --increment-min=4",
   "     --increment-max            | Num  | Stop mask incrementing at X                          | --increment-max=8",
@@ -239,15 +240,7 @@ static const char *const USAGE_BIG_POST_HASHMODES[] =
   NULL
 };
 
-typedef struct usage_sort
-{
-  u32   hash_mode;
-  char *hash_name;
-  u32   hash_category;
-
-} usage_sort_t;
-
-static int sort_by_usage (const void *p1, const void *p2)
+int sort_by_usage (const void *p1, const void *p2)
 {
   const usage_sort_t *u1 = (const usage_sort_t *) p1;
   const usage_sort_t *u2 = (const usage_sort_t *) p2;
