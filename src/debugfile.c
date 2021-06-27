@@ -33,6 +33,13 @@ static void debugfile_format_plain (hashcat_ctx_t *hashcat_ctx, const u8 *plain_
 
       break;
     }
+
+    if (plain_ptr[i] == ':')
+    {
+      needs_hexify = 1;
+
+      break;
+    }
   }
 
   if (needs_hexify == 1)
