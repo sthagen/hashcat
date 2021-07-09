@@ -295,10 +295,12 @@ u32 brain_compute_attack (hashcat_ctx_t *hashcat_ctx)
 
     const int markov_classic   = user_options->markov_classic;
     const int markov_disable   = user_options->markov_disable;
+    const int markov_inverse   = user_options->markov_inverse;
     const int markov_threshold = user_options->markov_threshold;
 
     XXH64_update (state, &markov_classic,   sizeof (markov_classic));
     XXH64_update (state, &markov_disable,   sizeof (markov_disable));
+    XXH64_update (state, &markov_inverse,   sizeof (markov_inverse));
     XXH64_update (state, &markov_threshold, sizeof (markov_threshold));
 
     if (user_options->markov_hcstat2)
@@ -352,10 +354,12 @@ u32 brain_compute_attack (hashcat_ctx_t *hashcat_ctx)
 
     const int markov_classic   = user_options->markov_classic;
     const int markov_disable   = user_options->markov_disable;
+    const int markov_inverse   = user_options->markov_inverse;
     const int markov_threshold = user_options->markov_threshold;
 
     XXH64_update (state, &markov_classic,   sizeof (markov_classic));
     XXH64_update (state, &markov_disable,   sizeof (markov_disable));
+    XXH64_update (state, &markov_inverse,   sizeof (markov_inverse));
     XXH64_update (state, &markov_threshold, sizeof (markov_threshold));
 
     if (user_options->markov_hcstat2)
@@ -445,10 +449,12 @@ u32 brain_compute_attack (hashcat_ctx_t *hashcat_ctx)
 
     const int markov_classic   = user_options->markov_classic;
     const int markov_disable   = user_options->markov_disable;
+    const int markov_inverse   = user_options->markov_inverse;
     const int markov_threshold = user_options->markov_threshold;
 
     XXH64_update (state, &markov_classic,   sizeof (markov_classic));
     XXH64_update (state, &markov_disable,   sizeof (markov_disable));
+    XXH64_update (state, &markov_inverse,   sizeof (markov_inverse));
     XXH64_update (state, &markov_threshold, sizeof (markov_threshold));
 
     if (user_options->markov_hcstat2)
@@ -2245,6 +2251,8 @@ void *brain_server_handle_client (void *p)
 
       brain_server_dbs->client_slots[client_idx] = 0;
 
+      hc_thread_mutex_unlock (brain_server_dbs->mux_dbs);
+
       close (client_fd);
 
       return NULL;
@@ -2278,6 +2286,8 @@ void *brain_server_handle_client (void *p)
       brain_logging (stderr, 0, "too many attacks\n");
 
       brain_server_dbs->client_slots[client_idx] = 0;
+
+      hc_thread_mutex_unlock (brain_server_dbs->mux_dbs);
 
       close (client_fd);
 
@@ -2317,6 +2327,10 @@ void *brain_server_handle_client (void *p)
   if (recv_buf == NULL)
   {
     brain_logging (stderr, 0, "%s\n", MSG_ENOMEM);
+
+    brain_server_dbs->client_slots[client_idx] = 0;
+
+    close (client_fd);
 
     return NULL;
   }

@@ -14,6 +14,7 @@
 #include "hwmon.h"
 #include "interface.h"
 #include "hashcat.h"
+#include "timer.h"
 #include "terminal.h"
 
 static const size_t TERMINAL_LINE_LENGTH = 79;
@@ -100,6 +101,7 @@ void welcome_screen (hashcat_ctx_t *hashcat_ctx, const char *version_tag)
     event_log_warning (hashcat_ctx, "You have enabled --force to bypass dangerous warnings and errors!");
     event_log_warning (hashcat_ctx, "This can hide serious problems and should only be done when debugging.");
     event_log_warning (hashcat_ctx, "Do not report hashcat issues encountered when using --force.");
+    event_log_warning (hashcat_ctx, NULL);
   }
 }
 
@@ -259,11 +261,24 @@ static void keypress (hashcat_ctx_t *hashcat_ctx)
         {
           event_log_info (hashcat_ctx, NULL);
 
+          time_t now;
+
+          time (&now);
+
           SuspendThreads (hashcat_ctx);
 
           if (status_ctx->devices_status == STATUS_PAUSED)
           {
-            event_log_info (hashcat_ctx, "Paused");
+            char buf[32] = { 0 };
+
+            char *pause_time = ctime_r (&now, buf);
+
+            const size_t pause_time_len = strlen (pause_time);
+
+            if (pause_time[pause_time_len - 1] == '\n') pause_time[pause_time_len - 1] = 0;
+            if (pause_time[pause_time_len - 2] == '\r') pause_time[pause_time_len - 2] = 0;
+
+            event_log_info (hashcat_ctx, "Paused at %s", pause_time);
           }
 
           event_log_info (hashcat_ctx, NULL);
@@ -279,11 +294,39 @@ static void keypress (hashcat_ctx_t *hashcat_ctx)
         {
           event_log_info (hashcat_ctx, NULL);
 
+          time_t now;
+
+          time (&now);
+
+          const double msec_paused = hc_timer_get (status_ctx->timer_paused);
+
           ResumeThreads (hashcat_ctx);
 
           if (status_ctx->devices_status != STATUS_PAUSED)
           {
-            event_log_info (hashcat_ctx, "Resumed");
+            char buf[32] = { 0 };
+
+            char *resume_time = ctime_r (&now, buf);
+
+            const size_t resume_time_len = strlen (resume_time);
+
+            if (resume_time[resume_time_len - 1] == '\n') resume_time[resume_time_len - 1] = 0;
+            if (resume_time[resume_time_len - 2] == '\r') resume_time[resume_time_len - 2] = 0;
+
+            struct tm *tmp;
+            struct tm  tm;
+
+            time_t sec_run = msec_paused / 1000;
+
+            tmp = gmtime_r (&sec_run, &tm);
+
+            char *display_pause = (char *) hcmalloc (HCBUFSIZ_TINY);
+
+            format_timer_display (tmp, display_pause, HCBUFSIZ_TINY);
+
+            event_log_info (hashcat_ctx, "Resumed at %s (paused for %s)", resume_time, display_pause);
+
+            hcfree (display_pause);
           }
 
           event_log_info (hashcat_ctx, NULL);
@@ -635,7 +678,7 @@ void hash_info_single (hashcat_ctx_t *hashcat_ctx, user_options_t *user_options)
 
       if (need_hexify ((const u8 *) hashconfig->st_pass, strlen (hashconfig->st_pass), user_options->separator, false))
       {
-        char tmp_buf[HCBUFSIZ_LARGE] = { 0 };
+        char *tmp_buf = (char *) hcmalloc (HCBUFSIZ_LARGE);
 
         int tmp_len = 0;
 
@@ -653,6 +696,8 @@ void hash_info_single (hashcat_ctx_t *hashcat_ctx, user_options_t *user_options)
         tmp_buf[tmp_len++] = 0;
 
         event_log_info (hashcat_ctx, "  Example.Pass........: %s", tmp_buf);
+
+        hcfree (tmp_buf);
       }
       else
       {

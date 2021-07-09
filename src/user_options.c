@@ -82,6 +82,7 @@ static const struct option long_options[] =
   {"markov-classic",            no_argument,       NULL, IDX_MARKOV_CLASSIC},
   {"markov-disable",            no_argument,       NULL, IDX_MARKOV_DISABLE},
   {"markov-hcstat2",            required_argument, NULL, IDX_MARKOV_HCSTAT2},
+  {"markov-inverse",            no_argument,       NULL, IDX_MARKOV_INVERSE},
   {"markov-threshold",          required_argument, NULL, IDX_MARKOV_THRESHOLD},
   {"nonce-error-corrections",   required_argument, NULL, IDX_NONCE_ERROR_CORRECTIONS},
   {"opencl-device-types",       required_argument, NULL, IDX_OPENCL_DEVICE_TYPES},
@@ -216,6 +217,7 @@ int user_options_init (hashcat_ctx_t *hashcat_ctx)
   user_options->markov_classic            = MARKOV_CLASSIC;
   user_options->markov_disable            = MARKOV_DISABLE;
   user_options->markov_hcstat2            = NULL;
+  user_options->markov_inverse            = MARKOV_INVERSE;
   user_options->markov_threshold          = MARKOV_THRESHOLD;
   user_options->nonce_error_corrections   = NONCE_ERROR_CORRECTIONS;
   user_options->opencl_device_types       = NULL;
@@ -425,6 +427,7 @@ int user_options_getopt (hashcat_ctx_t *hashcat_ctx, int argc, char **argv)
       case IDX_RULE_BUF_R:                user_options->rule_buf_r                = optarg;                          break;
       case IDX_MARKOV_DISABLE:            user_options->markov_disable            = true;                            break;
       case IDX_MARKOV_CLASSIC:            user_options->markov_classic            = true;                            break;
+      case IDX_MARKOV_INVERSE:            user_options->markov_inverse            = true;                            break;
       case IDX_MARKOV_THRESHOLD:          user_options->markov_threshold          = hc_strtoul (optarg, NULL, 10);   break;
       case IDX_MARKOV_HCSTAT2:            user_options->markov_hcstat2            = optarg;                          break;
       case IDX_OUTFILE:                   user_options->outfile                   = optarg;                          break;
@@ -2297,9 +2300,9 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
       if (hc_path_has_bom (user_options_extra->hc_hash) == true)
       {
-        event_log_error (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", user_options_extra->hc_hash);
+        event_log_warning (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", user_options_extra->hc_hash);
 
-        return -1;
+        //return -1;
       }
     }
   }
@@ -2347,9 +2350,9 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
       if (hc_path_has_bom (rp_file) == true)
       {
-        event_log_error (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", rp_file);
+        event_log_warning (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", rp_file);
 
-        return -1;
+        //return -1;
       }
     }
   }
@@ -2385,9 +2388,9 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
       if (hc_path_has_bom (dictfile1) == true)
       {
-        event_log_error (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", dictfile1);
+        event_log_warning (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", dictfile1);
 
-        return -1;
+        //return -1;
       }
 
       if (hc_path_exist (dictfile2) == false)
@@ -2413,9 +2416,9 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
       if (hc_path_has_bom (dictfile2) == true)
       {
-        event_log_error (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", dictfile2);
+        event_log_warning (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", dictfile2);
 
-        return -1;
+        //return -1;
       }
     }
   }
@@ -2445,9 +2448,9 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
         if (hc_path_has_bom (maskfile) == true)
         {
-          event_log_error (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", maskfile);
+          event_log_warning (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", maskfile);
 
-          return -1;
+          //return -1;
         }
       }
     }
@@ -2489,9 +2492,9 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
         if (hc_path_has_bom (maskfile) == true)
         {
-          event_log_error (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", maskfile);
+          event_log_warning (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", maskfile);
 
-          return -1;
+          //return -1;
         }
       }
     }
@@ -2533,9 +2536,9 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
         if (hc_path_has_bom (maskfile) == true)
         {
-          event_log_error (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", maskfile);
+          event_log_warning (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", maskfile);
 
-          return -1;
+          //return -1;
         }
       }
     }
@@ -2581,9 +2584,9 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
       if (hc_path_has_bom (rp_file) == true)
       {
-        event_log_error (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", rp_file);
+        event_log_warning (hashcat_ctx, "%s: Byte Order Mark (BOM) was detected", rp_file);
 
-        return -1;
+        //return -1;
       }
     }
   }
@@ -2845,6 +2848,27 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
     }
   }
 
+  // single kernel and module existence check to detect "7z e" errors
+
+  char *modulefile = (char *) hcmalloc (HCBUFSIZ_TINY);
+
+  module_filename (folder_config, 0, modulefile, HCBUFSIZ_TINY);
+
+  if (hc_path_exist (modulefile) == false)
+  {
+    event_log_error (hashcat_ctx, "%s: %s", modulefile, strerror (errno));
+
+    event_log_warning (hashcat_ctx, "If you are using the hashcat binary package, this may be an extraction issue.");
+    event_log_warning (hashcat_ctx, "For example, using \"7z e\" instead of using \"7z x\".");
+    event_log_warning (hashcat_ctx, NULL);
+
+    hcfree (modulefile);
+
+    return -1;
+  }
+
+  hcfree (modulefile);
+
   const bool quiet_save = user_options->quiet;
 
   user_options->quiet = true;
@@ -2853,46 +2877,30 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
   user_options->quiet = quiet_save;
 
-  if (rc == -1)
+  if (rc == -1) return -1;
+
+  hashconfig_destroy (hashcat_ctx);
+
+  // same check but for an backend kernel
+
+  char *kernelfile = (char *) hcmalloc (HCBUFSIZ_TINY);
+
+  generate_source_kernel_filename (false, ATTACK_EXEC_OUTSIDE_KERNEL, ATTACK_KERN_STRAIGHT, 400, 0, folder_config->shared_dir, kernelfile);
+
+  if (hc_path_read (kernelfile) == false)
   {
-    // module existence check to detect "7z e" errors
+    event_log_error (hashcat_ctx, "%s: %s", kernelfile, strerror (errno));
 
-    const module_ctx_t* module_ctx = hashcat_ctx->module_ctx;
+    event_log_warning (hashcat_ctx, "If you are using the hashcat binary package, this may be an extraction issue.");
+    event_log_warning (hashcat_ctx, "For example, using \"7z e\" instead of using \"7z x\".");
+    event_log_warning (hashcat_ctx, NULL);
 
-    if (module_ctx->module_handle == NULL)
-    {
-      event_log_warning (hashcat_ctx, "If you are using the hashcat binary package, this may be an extraction issue.");
-      event_log_warning (hashcat_ctx, "For example, using \"7z e\" instead of using \"7z x\".");
-      event_log_warning (hashcat_ctx, NULL);
-    }
-
-    hashconfig_destroy (hashcat_ctx);
+    hcfree (kernelfile);
 
     return -1;
   }
-  else
-  {
-    // same check but for an backend kernel
 
-    const hashconfig_t* hashconfig = hashcat_ctx->hashconfig;
-
-    char kernelfile[HCBUFSIZ_TINY] = { 0 };
-
-    generate_source_kernel_filename (user_options->slow_candidates, hashconfig->attack_exec, user_options_extra->attack_kern, hashconfig->kern_type, hashconfig->opti_type & OPTI_TYPE_OPTIMIZED_KERNEL, folder_config->shared_dir, kernelfile);
-
-    hashconfig_destroy (hashcat_ctx);
-
-    if (hc_path_read (kernelfile) == false)
-    {
-      event_log_error (hashcat_ctx, "%s: %s", kernelfile, strerror(errno));
-
-      event_log_warning (hashcat_ctx, "If you are using the hashcat binary package, this may be an extraction issue.");
-      event_log_warning (hashcat_ctx, "For example, using \"7z e\" instead of using \"7z x\".");
-      event_log_warning (hashcat_ctx, NULL);
-
-      return -1;
-    }
-  }
+  hcfree (kernelfile);
 
   // loopback - can't check at this point
 
@@ -3065,6 +3073,7 @@ void user_options_logger (hashcat_ctx_t *hashcat_ctx)
   logfile_top_uint   (user_options->machine_readable);
   logfile_top_uint   (user_options->markov_classic);
   logfile_top_uint   (user_options->markov_disable);
+  logfile_top_uint   (user_options->markov_inverse);
   logfile_top_uint   (user_options->markov_threshold);
   logfile_top_uint   (user_options->backend_info);
   logfile_top_uint   (user_options->backend_vector_width);
