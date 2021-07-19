@@ -24,6 +24,17 @@ typedef unsigned int       uint;
 typedef unsigned long long ulong;
 #endif
 
+#ifdef IS_HIP
+typedef unsigned char      uchar;
+typedef unsigned short     ushort;
+typedef unsigned int       uint;
+typedef unsigned long long ulong;
+
+typedef __SIZE_TYPE__ size_t;
+
+typedef uint uint4 __attribute__((ext_vector_type(4)));
+#endif
+
 #ifdef KERNEL_STATIC
 typedef uchar  u8;
 typedef ushort u16;
@@ -826,9 +837,6 @@ typedef __device_builtin__ struct u64x u64x;
 
 #elif defined IS_HIP
 
-// seems to work, but slow
-
-/*
 #if VECT_SIZE == 2
 
 struct u8x
@@ -1582,7 +1590,6 @@ typedef struct u64x u64x;
 #define make_u16x u16x
 #define make_u32x u32x
 #define make_u64x u64x
-*/
 
 #else
 typedef VTYPE(uchar,  VECT_SIZE)  u8x;
