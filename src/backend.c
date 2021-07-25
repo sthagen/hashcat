@@ -26,10 +26,10 @@
 #include "terminal.h"
 
 #if defined (__linux__)
-static const char *dri_card0_path = "/dev/dri/card0";
+static const char *const  dri_card0_path = "/dev/dri/card0";
 
-static const char *drm_card0_vendor_path = "/sys/class/drm/card0/device/vendor";
-static const char *drm_card0_driver_path = "/sys/class/drm/card0/device/driver";
+static const char *const  drm_card0_vendor_path = "/sys/class/drm/card0/device/vendor";
+static const char *const  drm_card0_driver_path = "/sys/class/drm/card0/device/driver";
 #endif
 
 static const u32 full01 = 0x01010101;
@@ -8841,6 +8841,10 @@ int backend_ctx_devices_init (hashcat_ctx_t *hashcat_ctx, const int comptime)
           opencl_device_vendor_id = VENDOR_ID_NV;
         }
         else if (strcmp (opencl_device_vendor, CL_VENDOR_APPLE_USE_INTEL) == 0)
+        {
+          opencl_device_vendor_id = VENDOR_ID_INTEL_SDK;
+        }
+        else if (strcmp (opencl_device_vendor, CL_VENDOR_APPLE_USE_INTEL2) == 0)
         {
           opencl_device_vendor_id = VENDOR_ID_INTEL_SDK;
         }
