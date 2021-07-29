@@ -5,6 +5,7 @@
 ##
 
 - Added option --multiply-accel-disable (short: -M) to disable multiply the kernel-accel with the multiprocessor count automatism
+- HIP Backend: Added support to support HIP 4.4 and later, but added check to rule out older versions because they are incompatible
 
 ##
 ## Bugs
@@ -38,6 +39,7 @@
 - ECC secp256k1: Removed the inline assembly code for AMD GPUs because the latest JIT compilers optimize it with the same efficiency
 - HIP Kernels: Got rid of hip/hip_runtime.h dependancy to enable more easy integration of the HIP backend on Windows
 - Kernel Cache: Add kernel threads into hash computation which is later used in the kernel cache filename
+- Memory Management: Refactored the code responsible for limiting kernel accel in order to avoid out of -host- memory situations
 - SCRYPT Kernels: Add more optimized values for some new NV/AMD GPUs
 
 ##
