@@ -9,23 +9,45 @@
 #include "bitops.h"
 #include "convert.h"
 #include "shared.h"
-#include "memory.h"
+#include "emu_inc_cipher_des.h"
+#include "emu_inc_hash_md5.h"
 
 static const u32   ATTACK_EXEC    = ATTACK_EXEC_OUTSIDE_KERNEL;
 static const u32   DGST_POS0      = 0;
-static const u32   DGST_POS1      = 1;
+static const u32   DGST_POS1      = 3;
 static const u32   DGST_POS2      = 2;
-static const u32   DGST_POS3      = 3;
+static const u32   DGST_POS3      = 1;
 static const u32   DGST_SIZE      = DGST_SIZE_4_4;
-static const u32   HASH_CATEGORY  = HASH_CATEGORY_OS;
-static const char *HASH_NAME      = "DPAPI masterkey file v1";
-static const u64   KERN_TYPE      = 15300;
-static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE
-                                  | OPTI_TYPE_SLOW_HASH_SIMD_LOOP;
-static const u64   OPTS_TYPE      = OPTS_TYPE_PT_GENERATE_LE;
+static const u32   HASH_CATEGORY  = HASH_CATEGORY_NETWORK_PROTOCOL;
+static const char *HASH_NAME      = "NetNTLMv2 (NT)";
+static const u64   KERN_TYPE      = 27100;
+static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE;
+static const u64   OPTS_TYPE      = OPTS_TYPE_PT_GENERATE_LE
+                                  | OPTS_TYPE_PT_ADD80
+                                  | OPTS_TYPE_PT_ADDBITS14
+                                  | OPTS_TYPE_PT_UTF16LE
+                                  | OPTS_TYPE_ST_HEX;
 static const u32   SALT_TYPE      = SALT_TYPE_EMBEDDED;
-static const char *ST_PASS        = "hashcat";
-static const char *ST_HASH        = "$DPAPImk$1*1*S-15-21-466364039-425773974-453930460-1925*des3*sha1*24000*b038489dee5ad04e3e3cab4d957258b5*208*cb9b5b7d96a0d2a00305ca403d3fd9c47c561e35b4b2cf3aebfd1d3199a6481d56972be7ebd6c291b199e6f1c2ffaee91978706737e9b1209e6c7d3aa3d8c3c3e38ad1ccfa39400d62c2415961c17fd0bd6b0f7bbd49cc1de1a394e64b7237f56244238da8d37d78";
+static const char *ST_PASS        = "b4b9b02e6f09a9bd760f388b67351e2b";
+static const char *ST_HASH        = "0UL5G37JOI0SX::6VB1IS0KA74:ebe1afa18b7fbfa6:aab8bf8675658dd2a939458a1077ba08:010100000000000031c8aa092510945398b9f7b7dde1a9fb00000000f7876f2b04b700";
+
+typedef struct netntlm
+{
+  int user_len;
+  int domain_len;
+  int srvchall_len;
+  int clichall_len;
+
+  u32 userdomain_buf[64];
+  u32 chall_buf[256];
+
+} netntlm_t;
+
+typedef struct netntlmv2_tmp
+{
+  u32 digest_buf[4];
+
+} netntlm_tmp_t;
 
 u32         module_attack_exec    (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return ATTACK_EXEC;     }
 u32         module_dgst_pos0      (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return DGST_POS0;       }
@@ -42,343 +64,270 @@ u32         module_salt_type      (MAYBE_UNUSED const hashconfig_t *hashconfig, 
 const char *module_st_hash        (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return ST_HASH;         }
 const char *module_st_pass        (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return ST_PASS;         }
 
-typedef struct dpapimk
-{
-  u32 context;
-
-  u32 SID[32];
-  u32 SID_len;
-  u32 SID_offset;
-
-  /* here only for possible
-     forward compatibiliy
-  */
-  // u8 cipher_algo[16];
-  // u8 hash_algo[16];
-
-  u32 iv[4];
-  u32 contents_len;
-  u32 contents[128];
-
-} dpapimk_t;
-
-typedef struct dpapimk_tmp_v1
-{
-  u32 ipad[5];
-  u32 opad[5];
-  u32 dgst[10];
-  u32 out[10];
-
-  u32 userKey[5];
-
-} dpapimk_tmp_v1_t;
-
-static const char *SIGNATURE_DPAPIMK = "$DPAPImk$";
-
-bool module_unstable_warning (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra, MAYBE_UNUSED const hc_device_param_t *device_param)
-{
-  // amdgpu-pro-20.50-1234664-ubuntu-20.04 (legacy)
-  // test_1619943729/test_report.log:! unhandled return code 255, cmdline : cat test_1619943729/15300_passwords.txt | ./hashcat --quiet --potfile-disable --runtime 400 --hwmon-disable -O -D 2 --backend-vector-width 1 -a 0 -m 15300 test_1619943729/15300_hashes.txt
-  // test_1619955152/test_report.log:! unhandled return code 255, cmdline : cat test_1619955152/15300_passwords.txt | ./hashcat --quiet --potfile-disable --runtime 400 --hwmon-disable -D 2 --backend-vector-width 4 -a 0 -m 15300 test_1619955152/15300_hashes.txt
-  if ((device_param->opencl_device_vendor_id == VENDOR_ID_AMD) && (device_param->has_vperm == false))
-  {
-    return true;
-  }
-
-  return false;
-}
-
 u64 module_tmp_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
 {
-  const u64 tmp_size = (const u64) sizeof (dpapimk_tmp_v1_t);
+  const u64 tmp_size = (const u64) sizeof (netntlm_tmp_t);
 
   return tmp_size;
 }
 
 u64 module_esalt_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
 {
-  const u64 esalt_size = (const u64) sizeof (dpapimk_t);
+  const u64 esalt_size = (const u64) sizeof (netntlm_t);
 
   return esalt_size;
-}
-
-u32 module_pw_max (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
-{
-  const u32 pw_max = PW_MAX;
-
-  return pw_max;
 }
 
 int module_hash_decode (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED void *digest_buf, MAYBE_UNUSED salt_t *salt, MAYBE_UNUSED void *esalt_buf, MAYBE_UNUSED void *hook_salt_buf, MAYBE_UNUSED hashinfo_t *hash_info, const char *line_buf, MAYBE_UNUSED const int line_len)
 {
   u32 *digest = (u32 *) digest_buf;
 
-  dpapimk_t *dpapimk = (dpapimk_t *) esalt_buf;
+  netntlm_t *netntlm = (netntlm_t *) esalt_buf;
 
   token_t token;
 
-  token.token_cnt  = 10;
+  token.token_cnt  = 6;
 
-  token.signatures_cnt    = 1;
-  token.signatures_buf[0] = SIGNATURE_DPAPIMK;
+  // username
+  token.len_min[0] = 0;
+  token.len_max[0] = 60;
+  token.sep[0]     = ':';
+  token.attr[0]    = TOKEN_ATTR_VERIFY_LENGTH;
 
-  // signature
-  token.len[0]     = 9;
-  token.attr[0]    = TOKEN_ATTR_FIXED_LENGTH
-                   | TOKEN_ATTR_VERIFY_SIGNATURE;
+  // unused
+  token.len_min[1] = 0;
+  token.len_max[1] = 0;
+  token.sep[1]     = ':';
+  token.attr[1]    = TOKEN_ATTR_VERIFY_LENGTH;
 
-  // version
-  token.len_min[1] = 1;
-  token.len_max[1] = 1;
-  token.sep[1]     = '*';
-  token.attr[1]    = TOKEN_ATTR_VERIFY_LENGTH
-                   | TOKEN_ATTR_VERIFY_DIGIT;
+  // domain
+  token.len_min[2] = 0;
+  token.len_max[2] = 45;
+  token.sep[2]     = ':';
+  token.attr[2]    = TOKEN_ATTR_VERIFY_LENGTH;
 
-  // context
-  token.len_min[2] = 1;
-  token.len_max[2] = 1;
-  token.sep[2]     = '*';
-  token.attr[2]    = TOKEN_ATTR_VERIFY_LENGTH
-                   | TOKEN_ATTR_VERIFY_DIGIT;
-
-  // sid
-  token.len_min[3] = 10;
-  token.len_max[3] = 60;
-  token.sep[3]     = '*';
-  token.attr[3]    = TOKEN_ATTR_VERIFY_LENGTH;
-
-  // cipher
-  token.len_min[4] = 4;
-  token.len_max[4] = 6;
-  token.sep[4]     = '*';
-  token.attr[4]    = TOKEN_ATTR_VERIFY_LENGTH;
-
-  // hash
-  token.len_min[5] = 4;
-  token.len_max[5] = 6;
-  token.sep[5]     = '*';
-  token.attr[5]    = TOKEN_ATTR_VERIFY_LENGTH;
-
-  // iterations
-  token.len_min[6] = 1;
-  token.len_max[6] = 6;
-  token.sep[6]     = '*';
-  token.attr[6]    = TOKEN_ATTR_VERIFY_LENGTH
-                   | TOKEN_ATTR_VERIFY_DIGIT;
-
-  // iv
-  token.len_min[7] = 32;
-  token.len_max[7] = 32;
-  token.sep[7]     = '*';
-  token.attr[7]    = TOKEN_ATTR_VERIFY_LENGTH
+  // lm response
+  token.len_min[3] = 16;
+  token.len_max[3] = 16;
+  token.sep[3]     = ':';
+  token.attr[3]    = TOKEN_ATTR_VERIFY_LENGTH
                    | TOKEN_ATTR_VERIFY_HEX;
 
-  // content len
-  token.len_min[8] = 1;
-  token.len_max[8] = 6;
-  token.sep[8]     = '*';
-  token.attr[8]    = TOKEN_ATTR_VERIFY_LENGTH
-                   | TOKEN_ATTR_VERIFY_DIGIT;
+  // ntlm response
+  token.len_min[4] = 32;
+  token.len_max[4] = 32;
+  token.sep[4]     = ':';
+  token.attr[4]    = TOKEN_ATTR_VERIFY_LENGTH
+                   | TOKEN_ATTR_VERIFY_HEX;
 
-  // content
-  token.len_min[9] = 0;
-  token.len_max[9] = 1024;
-  token.attr[9]    = TOKEN_ATTR_VERIFY_LENGTH
+  // challenge
+  token.len_min[5] = 2;
+  token.len_max[5] = 1024;
+  token.sep[5]     = ':';
+  token.attr[5]    = TOKEN_ATTR_VERIFY_LENGTH
                    | TOKEN_ATTR_VERIFY_HEX;
 
   const int rc_tokenizer = input_tokenizer ((const u8 *) line_buf, line_len, &token);
 
   if (rc_tokenizer != PARSER_OK) return (rc_tokenizer);
 
-  const u8 *version_pos       = token.buf[1];
-  const u8 *context_pos       = token.buf[2];
-  const u8 *SID_pos           = token.buf[3];
-  const u8 *rounds_pos        = token.buf[6];
-  const u8 *iv_pos            = token.buf[7];
-  const u8 *contents_len_pos  = token.buf[8];
-  const u8 *contents_pos      = token.buf[9];
+  const u8 *user_pos     = token.buf[0];
+  const u8 *domain_pos   = token.buf[2];
+  const u8 *srvchall_pos = token.buf[3];
+  const u8 *hash_pos     = token.buf[4];
+  const u8 *clichall_pos = token.buf[5];
+
+  const int user_len     = token.len[0];
+  const int domain_len   = token.len[2];
+  const int srvchall_len = token.len[3];
+  const int clichall_len = token.len[5];
 
   /**
-   * content verification
+   * store some data for later use
    */
 
-  const int version      = hc_strtoul ((const char *) version_pos,      NULL, 10);
-  const int contents_len = hc_strtoul ((const char *) contents_len_pos, NULL, 10);
+  netntlm->user_len     = user_len     * 2;
+  netntlm->domain_len   = domain_len   * 2;
+  netntlm->srvchall_len = srvchall_len / 2;
+  netntlm->clichall_len = clichall_len / 2;
 
-  if (version == 1)
+  u8 *userdomain_ptr = (u8 *) netntlm->userdomain_buf;
+  u8 *chall_ptr      = (u8 *) netntlm->chall_buf;
+
+  /**
+   * handle username and domainname
+   */
+
+  for (int i = 0; i < user_len; i++)
   {
-    if (contents_len != 208) return (PARSER_SALT_LENGTH);
-  }
-  else if (version == 2)
-  {
-    if (contents_len != 288) return (PARSER_SALT_LENGTH);
-  }
-  else
-  {
-    return (PARSER_SALT_VALUE);
-  }
-
-  if (contents_len != token.len[9]) return (PARSER_SALT_LENGTH);
-
-  dpapimk->contents_len = contents_len;
-
-  dpapimk->context = hc_strtoul ((const char *) context_pos, NULL, 10);
-
-  for (u32 i = 0; i < dpapimk->contents_len / 8; i++)
-  {
-    dpapimk->contents[i] = hex_to_u32 ((const u8 *) &contents_pos[i * 8]);
-
-    dpapimk->contents[i] = byte_swap_32 (dpapimk->contents[i]);
+    *userdomain_ptr++ = toupper (user_pos[i]);
+    *userdomain_ptr++ = 0;
   }
 
-  // SID
-
-  const int SID_len = token.len[3];
-
-  u8 SID_utf16le[128] = { 0 };
-
-  for (int i = 0; i < SID_len; i++)
+  for (int i = 0; i < domain_len; i++)
   {
-    SID_utf16le[i * 2] = SID_pos[i];
+    *userdomain_ptr++ = domain_pos[i];
+    *userdomain_ptr++ = 0;
   }
 
-  /* Specific to DPAPI: needs trailing '\0' while computing hash */
+  *userdomain_ptr++ = 0x80;
 
-  dpapimk->SID_len = (SID_len + 1) * 2;
+  /**
+   * handle server challenge encoding
+   */
 
-  SID_utf16le[dpapimk->SID_len] = 0x80;
-
-  memcpy ((u8 *) dpapimk->SID, SID_utf16le, sizeof (SID_utf16le));
-
-  for (u32 i = 0; i < 32; i++)
+  for (int i = 0; i < srvchall_len; i += 2)
   {
-    dpapimk->SID[i] = byte_swap_32 (dpapimk->SID[i]);
+    const u8 p0 = srvchall_pos[i + 0];
+    const u8 p1 = srvchall_pos[i + 1];
+
+    *chall_ptr++ = hex_convert (p1) << 0
+                 | hex_convert (p0) << 4;
   }
 
-  // iv
+  /**
+   * handle client challenge encoding
+   */
 
-  dpapimk->iv[0] = hex_to_u32 ((const u8 *) &iv_pos[ 0]);
-  dpapimk->iv[1] = hex_to_u32 ((const u8 *) &iv_pos[ 8]);
-  dpapimk->iv[2] = hex_to_u32 ((const u8 *) &iv_pos[16]);
-  dpapimk->iv[3] = hex_to_u32 ((const u8 *) &iv_pos[24]);
+  for (int i = 0; i < clichall_len; i += 2)
+  {
+    const u8 p0 = clichall_pos[i + 0];
+    const u8 p1 = clichall_pos[i + 1];
 
-  dpapimk->iv[0] = byte_swap_32 (dpapimk->iv[0]);
-  dpapimk->iv[1] = byte_swap_32 (dpapimk->iv[1]);
-  dpapimk->iv[2] = byte_swap_32 (dpapimk->iv[2]);
-  dpapimk->iv[3] = byte_swap_32 (dpapimk->iv[3]);
+    *chall_ptr++ = hex_convert (p1) << 0
+                 | hex_convert (p0) << 4;
+  }
 
-  digest[0] = dpapimk->iv[0];
-  digest[1] = dpapimk->iv[1];
-  digest[2] = dpapimk->iv[2];
-  digest[3] = dpapimk->iv[3];
+  *chall_ptr++ = 0x80;
 
-  salt->salt_buf[0] = dpapimk->iv[0];
-  salt->salt_buf[1] = dpapimk->iv[1];
-  salt->salt_buf[2] = dpapimk->iv[2];
-  salt->salt_buf[3] = dpapimk->iv[3];
+  /**
+   * handle hash itself
+   */
+
+  digest[0] = hex_to_u32 (hash_pos +  0);
+  digest[1] = hex_to_u32 (hash_pos +  8);
+  digest[2] = hex_to_u32 (hash_pos + 16);
+  digest[3] = hex_to_u32 (hash_pos + 24);
+
+  /**
+   * reuse challange data as salt_buf, its the buffer that is most likely unique
+   */
+
+  salt->salt_buf[0] = 0;
+  salt->salt_buf[1] = 0;
+  salt->salt_buf[2] = 0;
+  salt->salt_buf[3] = 0;
+  salt->salt_buf[4] = 0;
+  salt->salt_buf[5] = 0;
+  salt->salt_buf[6] = 0;
+  salt->salt_buf[7] = 0;
+
+  u32 *uptr;
+
+  uptr = (u32 *) netntlm->userdomain_buf;
+
+  for (u32 i = 0; i < 64; i += 16, uptr += 16)
+  {
+    md5_transform (uptr + 0, uptr + 4, uptr + 8, uptr + 12, salt->salt_buf);
+  }
+
+  uptr = (u32 *) netntlm->chall_buf;
+
+  for (u32 i = 0; i < 256; i += 16, uptr += 16)
+  {
+    md5_transform (uptr + 0, uptr + 4, uptr + 8, uptr + 12, salt->salt_buf);
+  }
 
   salt->salt_len = 16;
-
-  // iter
-
-  salt->salt_iter = hc_strtoul ((const char *) rounds_pos, NULL, 10) - 1;
 
   return (PARSER_OK);
 }
 
 int module_hash_encode (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const void *digest_buf, MAYBE_UNUSED const salt_t *salt, MAYBE_UNUSED const void *esalt_buf, MAYBE_UNUSED const void *hook_salt_buf, MAYBE_UNUSED const hashinfo_t *hash_info, char *line_buf, MAYBE_UNUSED const int line_size)
 {
-  const dpapimk_t *dpapimk = (const dpapimk_t *) esalt_buf;
+  const u32 *digest = (const u32 *) digest_buf;
 
-  u32 version      = 1;
-  u32 context      = dpapimk->context;
-  u32 rounds       = salt->salt_iter + 1;
-  u32 contents_len = dpapimk->contents_len;
-  u32 SID_len      = dpapimk->SID_len;
-  u32 iv_len       = 32;
+  const netntlm_t *netntlm = (const netntlm_t *) esalt_buf;
 
-  u8 cipher_algorithm[8] = { 0 };
-  u8 hash_algorithm[8]   = { 0 };
-  u8 SID[512]            = { 0 };
+  // we can not change anything in the original buffer, otherwise destroying sorting
+  // therefore create some local buffer
 
-  u8* SID_tmp;
+  u32 tmp[4];
 
-  u32  *ptr_SID      = (u32 *)  dpapimk->SID;
-  u32  *ptr_iv       = (u32 *)  dpapimk->iv;
-  u32  *ptr_contents = (u32 *)  dpapimk->contents;
+  tmp[0] = digest[0];
+  tmp[1] = digest[1];
+  tmp[2] = digest[2];
+  tmp[3] = digest[3];
 
-  u32 u32_iv[4];
+  u8 *out_buf = (u8 *) line_buf;
 
-  u8 iv[32 + 1];
+  int out_len = 0;
 
-  // convert back SID
+  u8 *ptr;
 
-  SID_tmp = (u8 *) hcmalloc ((SID_len + 1) * sizeof(u8));
+  ptr = (u8 *) netntlm->userdomain_buf;
 
-  for (u32 i = 0; i < (SID_len / 4); i++)
+  for (int i = 0; i < netntlm->user_len; i += 2)
   {
-    u8 hex[8] = { 0 };
-
-    u32_to_hex (byte_swap_32 (ptr_SID[i]), hex);
-
-    for (u32 j = 0, k = 0; j < 8; j += 2, k++)
-    {
-      SID_tmp[i * 4 + k] = hex_to_u8 (&hex[j]);
-    }
+    out_buf[out_len++] = ptr[i];
   }
 
-  // overwrite trailing 0x80
-  SID_tmp[SID_len] = 0;
+  out_buf[out_len++] = ':';
+  out_buf[out_len++] = ':';
 
-  for (u32 i = 0, j = 0 ; j < SID_len ; i++, j += 2)
+  ptr += netntlm->user_len;
+
+  for (int i = 0; i < netntlm->domain_len; i += 2)
   {
-    SID[i] = SID_tmp[j];
+    out_buf[out_len++] = ptr[i];
   }
 
-  hcfree (SID_tmp);
+  out_buf[out_len++] = ':';
 
-  for (u32 i = 0; i < iv_len / 8; i++)
+  ptr = (u8 *) netntlm->chall_buf;
+
+  for (int i = 0; i < netntlm->srvchall_len; i++)
   {
-    u32_iv[i] = byte_swap_32 (ptr_iv[i]);
-
-    u32_to_hex (u32_iv[i], iv +  i * 8);
+    u8_to_hex (ptr[i], out_buf + out_len); out_len += 2;
   }
 
-  iv[32] = 0;
+  out_buf[out_len++] = ':';
 
-  u32 u32_contents[36];
+  u32_to_hex (tmp[0], out_buf + out_len); out_len += 8;
+  u32_to_hex (tmp[1], out_buf + out_len); out_len += 8;
+  u32_to_hex (tmp[2], out_buf + out_len); out_len += 8;
+  u32_to_hex (tmp[3], out_buf + out_len); out_len += 8;
 
-  u8 contents[288 + 1];
+  out_buf[out_len++] = ':';
 
-  for (u32 i = 0; i < contents_len / 8; i++)
+  ptr += netntlm->srvchall_len;
+
+  for (int i = 0; i < netntlm->clichall_len; i++)
   {
-    u32_contents[i] = byte_swap_32 (ptr_contents[i]);
-
-    u32_to_hex (u32_contents[i], contents + i * 8);
+    u8_to_hex (ptr[i], out_buf + out_len); out_len += 2;
   }
 
-  contents[208] = 0;
+  return out_len;
+}
 
-  if (contents_len == 208)
-  {
-    memcpy (cipher_algorithm, "des3", strlen ("des3"));
+u32 module_pw_max (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
+{
+  const u32 pw_max = 32; // Length of a NT hash
 
-    memcpy (hash_algorithm, "sha1", strlen ("sha1"));
-  }
+  return pw_max;
+}
 
-  const int line_len = snprintf (line_buf, line_size, "%s%u*%u*%s*%s*%s*%u*%s*%u*%s",
-    SIGNATURE_DPAPIMK,
-    version,
-    context,
-    SID,
-    cipher_algorithm,
-    hash_algorithm,
-    rounds,
-    iv,
-    contents_len,
-    contents);
+u32 module_pw_min (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
+{
+  const u32 pw_min = 32; // Length of a NT hash
 
-  return line_len;
+  return pw_min;
+}
+
+const char *module_benchmark_mask (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
+{
+ const char *mask = "?a?a?a?a?a?a?a?axxxxxxxxxxxxxxxx";
+ return mask;
 }
 
 void module_init (module_ctx_t *module_ctx)
@@ -389,7 +338,7 @@ void module_init (module_ctx_t *module_ctx)
   module_ctx->module_attack_exec              = module_attack_exec;
   module_ctx->module_benchmark_esalt          = MODULE_DEFAULT;
   module_ctx->module_benchmark_hook_salt      = MODULE_DEFAULT;
-  module_ctx->module_benchmark_mask           = MODULE_DEFAULT;
+  module_ctx->module_benchmark_mask           = module_benchmark_mask;
   module_ctx->module_benchmark_salt           = MODULE_DEFAULT;
   module_ctx->module_build_plain_postprocess  = MODULE_DEFAULT;
   module_ctx->module_deep_comp_kernel         = MODULE_DEFAULT;
@@ -446,7 +395,7 @@ void module_init (module_ctx_t *module_ctx)
   module_ctx->module_potfile_keep_all_hashes  = MODULE_DEFAULT;
   module_ctx->module_pwdump_column            = MODULE_DEFAULT;
   module_ctx->module_pw_max                   = module_pw_max;
-  module_ctx->module_pw_min                   = MODULE_DEFAULT;
+  module_ctx->module_pw_min                   = module_pw_min;
   module_ctx->module_salt_max                 = MODULE_DEFAULT;
   module_ctx->module_salt_min                 = MODULE_DEFAULT;
   module_ctx->module_salt_type                = module_salt_type;
@@ -454,6 +403,6 @@ void module_init (module_ctx_t *module_ctx)
   module_ctx->module_st_hash                  = module_st_hash;
   module_ctx->module_st_pass                  = module_st_pass;
   module_ctx->module_tmp_size                 = module_tmp_size;
-  module_ctx->module_unstable_warning         = module_unstable_warning;
+  module_ctx->module_unstable_warning         = MODULE_DEFAULT;
   module_ctx->module_warmup_disable           = MODULE_DEFAULT;
 }
