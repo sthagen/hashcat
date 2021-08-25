@@ -783,34 +783,35 @@ typedef enum user_options_map
   IDX_RP_FILE                   = 'r',
   IDX_RP_GEN_FUNC_MAX           = 0xff3c,
   IDX_RP_GEN_FUNC_MIN           = 0xff3d,
+  IDX_RP_GEN_FUNC_SEL           = 0xff3e,
   IDX_RP_GEN                    = 'g',
-  IDX_RP_GEN_SEED               = 0xff3e,
+  IDX_RP_GEN_SEED               = 0xff3f,
   IDX_RULE_BUF_L                = 'j',
   IDX_RULE_BUF_R                = 'k',
-  IDX_RUNTIME                   = 0xff3f,
-  IDX_SCRYPT_TMTO               = 0xff40,
+  IDX_RUNTIME                   = 0xff40,
+  IDX_SCRYPT_TMTO               = 0xff41,
   IDX_SEGMENT_SIZE              = 'c',
-  IDX_SELF_TEST_DISABLE         = 0xff41,
+  IDX_SELF_TEST_DISABLE         = 0xff42,
   IDX_SEPARATOR                 = 'p',
-  IDX_SESSION                   = 0xff42,
-  IDX_SHOW                      = 0xff43,
+  IDX_SESSION                   = 0xff43,
+  IDX_SHOW                      = 0xff44,
   IDX_SKIP                      = 's',
   IDX_SLOW_CANDIDATES           = 'S',
-  IDX_SPEED_ONLY                = 0xff44,
-  IDX_SPIN_DAMP                 = 0xff45,
-  IDX_STATUS                    = 0xff46,
-  IDX_STATUS_JSON               = 0xff47,
-  IDX_STATUS_TIMER              = 0xff48,
-  IDX_STDOUT_FLAG               = 0xff49,
-  IDX_STDIN_TIMEOUT_ABORT       = 0xff4a,
-  IDX_TRUECRYPT_KEYFILES        = 0xff4b,
-  IDX_USERNAME                  = 0xff4c,
-  IDX_VERACRYPT_KEYFILES        = 0xff4d,
-  IDX_VERACRYPT_PIM_START       = 0xff4e,
-  IDX_VERACRYPT_PIM_STOP        = 0xff4f,
+  IDX_SPEED_ONLY                = 0xff45,
+  IDX_SPIN_DAMP                 = 0xff46,
+  IDX_STATUS                    = 0xff47,
+  IDX_STATUS_JSON               = 0xff48,
+  IDX_STATUS_TIMER              = 0xff49,
+  IDX_STDOUT_FLAG               = 0xff4a,
+  IDX_STDIN_TIMEOUT_ABORT       = 0xff4b,
+  IDX_TRUECRYPT_KEYFILES        = 0xff4c,
+  IDX_USERNAME                  = 0xff4d,
+  IDX_VERACRYPT_KEYFILES        = 0xff4e,
+  IDX_VERACRYPT_PIM_START       = 0xff4f,
+  IDX_VERACRYPT_PIM_STOP        = 0xff50,
   IDX_VERSION_LOWER             = 'v',
   IDX_VERSION                   = 'V',
-  IDX_WORDLIST_AUTOHEX_DISABLE  = 0xff50,
+  IDX_WORDLIST_AUTOHEX_DISABLE  = 0xff51,
   IDX_WORKLOAD_PROFILE          = 'w',
 
 } user_options_map_t;
@@ -1074,8 +1075,6 @@ typedef struct hc_fp
   gzFile      gfp; //  gzip fp
   unzFile     ufp; //   zip fp
 
-  bool        is_gzip;
-  bool        is_zip;
   int         bom_size;
 
   const char *mode;
@@ -1110,6 +1109,7 @@ typedef struct hc_device_param
   u64     device_maxmem_alloc;
   u64     device_global_mem;
   u64     device_available_mem;
+  int     device_host_unified_memory;
   u32     device_maxclock_frequency;
   size_t  device_maxworkgroup_size;
   u64     device_local_mem_size;
@@ -1241,6 +1241,7 @@ typedef struct hc_device_param
   u32     kernel_loops_min_sav; // the _sav are required because each -i iteration
   u32     kernel_loops_max_sav; // needs to recalculate the kernel_loops_min/max based on the current amplifier count
   u32     kernel_threads;
+  u32     kernel_threads_prev;
   u32     kernel_threads_min;
   u32     kernel_threads_max;
 
@@ -2180,6 +2181,7 @@ typedef struct user_options
   char        *potfile_path;
   char        *restore_file_path;
   char       **rp_files;
+  char        *rp_gen_func_sel;
   char        *separator;
   char        *truecrypt_keyfiles;
   char        *veracrypt_keyfiles;

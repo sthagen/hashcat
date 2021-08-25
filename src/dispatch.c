@@ -194,22 +194,31 @@ static int calc_stdin (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_par
     memset (device_param->pws_comp, 0, device_param->size_pws_comp);
     memset (device_param->pws_idx,  0, device_param->size_pws_idx);
 
+    #define DISABLE_READ_TIMEOUT_AFTER 1000
+
+    int selects_returned = 0;
+
     while (device_param->pws_cnt < device_param->kernel_power)
     {
-      const int rc_select = select_read_timeout_console (1);
-
-      if (rc_select == -1) break;
-
-      if (rc_select == 0)
+      if (selects_returned < DISABLE_READ_TIMEOUT_AFTER)
       {
-        if (status_ctx->run_thread_level1 == false) break;
+        const int rc_select = select_read_timeout_console (1);
 
-        status_ctx->stdin_read_timeout_cnt++;
+        if (rc_select == -1) break;
 
-        continue;
+        if (rc_select == 0)
+        {
+          if (status_ctx->run_thread_level1 == false) break;
+
+          status_ctx->stdin_read_timeout_cnt++;
+
+          continue;
+        }
+
+        status_ctx->stdin_read_timeout_cnt = 0;
+
+        selects_returned++;
       }
-
-      status_ctx->stdin_read_timeout_cnt = 0;
 
       char *line_buf = fgets (buf, HCBUFSIZ_LARGE - 1, stdin);
 
@@ -312,11 +321,13 @@ static int calc_stdin (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_par
     if (device_param->speed_only_finish == true) break;
   }
 
-  device_param->kernel_accel_prev = device_param->kernel_accel;
-  device_param->kernel_loops_prev = device_param->kernel_loops;
+  device_param->kernel_accel_prev   = device_param->kernel_accel;
+  device_param->kernel_loops_prev   = device_param->kernel_loops;
+  device_param->kernel_threads_prev = device_param->kernel_threads;
 
-  device_param->kernel_accel = 0;
-  device_param->kernel_loops = 0;
+  device_param->kernel_accel   = 0;
+  device_param->kernel_loops   = 0;
+  device_param->kernel_threads = 0;
 
   if (iconv_enabled == true)
   {
@@ -1570,11 +1581,13 @@ static int calc (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param)
     }
   }
 
-  device_param->kernel_accel_prev = device_param->kernel_accel;
-  device_param->kernel_loops_prev = device_param->kernel_loops;
+  device_param->kernel_accel_prev   = device_param->kernel_accel;
+  device_param->kernel_loops_prev   = device_param->kernel_loops;
+  device_param->kernel_threads_prev = device_param->kernel_threads;
 
-  device_param->kernel_accel = 0;
-  device_param->kernel_loops = 0;
+  device_param->kernel_accel   = 0;
+  device_param->kernel_loops   = 0;
+  device_param->kernel_threads = 0;
 
   return 0;
 }
